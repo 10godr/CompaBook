@@ -41,7 +41,7 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 | Usuarios | **Multiusuario** con cuentas propias; cada usuario solo ve sus datos |
 | Plataforma | **PWA** instalable en iPhone y usable en computadora |
 | Login | **Propio** (sin Supabase Auth): email + contraseña, verificación por código, recuperación de contraseña. Solo email por ahora |
-| Sesión | **Cookie segura `httpOnly`** con JWT; sin cookies de analítica ni publicidad |
+| Sesión | **Cookie segura `httpOnly`** con token de sesión guardado (hasheado) en la base de datos; sin cookies de analítica ni publicidad |
 | Base de datos | **PostgreSQL alojado en Supabase**, accedido con **SQLAlchemy** y migraciones con **Alembic** |
 | Uso de Supabase | Solo como **base de datos** y **`pg_cron`** (reloj). No se usa su Auth ni su API automática |
 | Backend | **Python + FastAPI** |
