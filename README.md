@@ -17,3 +17,4 @@ Todavía está en fase de diseño, sin código.
 
 - [`docs/contexto.md`](docs/contexto.md): qué es el proyecto, decisiones, alcance y plan por fases
 - [`docs/design.md`](docs/design.md): referencia visual (colores, tipografía, componentes)
+- [`docs/diseno-tecnico.md`](docs/diseno-tecnico.md): base de datos, API, flujo de la IA y criterios de aceptación

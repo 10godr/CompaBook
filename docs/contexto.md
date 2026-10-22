@@ -242,10 +242,10 @@ No es necesario crear todos los directorios desde el primer día. El README debe
 
 - [x] **Hosting del backend y del worker/scheduler:** Vercel + Supabase `pg_cron`.
 - [x] **Hosting del frontend PWA:** Vercel.
-- [ ] **Modelo concreto de Gemini** según la cuota gratuita vigente.
+- [x] **Modelo concreto de Gemini:** `gemini-3.8-flash` con respaldo `gemini-3.5-flash-lite` (ver `diseno-tecnico.md`).
 - [x] **Profundidad de explicaciones:** de lo básico a ejemplo técnico real.
 - [ ] **Autenticación del atajo de Siri** (token personal, etc.).
-- [ ] **Esquema JSON exacto de la ficha** y del contrato de API.
-- [ ] **Criterios de aceptación** por funcionalidad.
+- [x] **Esquema JSON de la ficha y contrato de API:** en `diseno-tecnico.md`.
+- [x] **Criterios de aceptación:** en `diseno-tecnico.md`.
 - [ ] Identidad visual: **la define el usuario** con su referencia (no decidir).
 - [ ] Visibilidad del repo: **privado**; el usuario lo gestionará después (no decidir).
