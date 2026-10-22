@@ -61,4 +61,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
-        run: gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none --body "Preview: $DEPLOY_URL"
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} --edit-last --create-if-none --body "Preview: $DEPLOY_URL"
