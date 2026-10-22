@@ -46,7 +46,7 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 | Uso de Supabase | Solo como **base de datos** y **`pg_cron`** (reloj). No se usa su Auth ni su API automática |
 | Backend | **Python + FastAPI** |
 | Frontend | **React + TypeScript + Vite** (PWA) |
-| Hosting | **Vercel** (Hobby), subdominio `*.vercel.app`. Sin dominio propio por ahora |
+| Hosting | **Vercel** (Hobby), subdominio `*.vercel.app`. Sin dominio propio por ahora. Frontend y backend en el **mismo proyecto y mismo dominio** (el backend en `/api`) para que la cookie de sesión funcione en Safari de iPhone |
 | Correos | **Gmail del proyecto** por SMTP con contraseña de aplicación, detrás de `EmailProvider` (migrable a Resend cuando haya dominio) |
 | IA | **Gemini API, nivel gratuito**, detrás de `AIProvider` |
 | Videos | **YouTube Data API**, 2 videos en el idioma del usuario, **reutilizando** resultados ya buscados |
@@ -60,6 +60,8 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 
 ### Descartado y por qué
 
+- **JWT para la sesión:** se prefieren sesiones guardadas en la base de datos, porque cerrar sesión o eliminar la cuenta corta el acceso al instante y no hay claves de firma que gestionar.
+- **Frontend y backend en dominios separados:** Safari en iPhone bloquea las cookies entre dominios y el login fallaría.
 - **Supabase Auth:** el equipo prefiere construir el login propio para aprender y no depender del proveedor.
 - **Sesiones de estudio y selección de conceptos:** sustituidas por un recordatorio diario simple.
 - **Explicación por niveles, preguntas de repaso, conceptos relacionados, categorías y etiquetas:** fuera, porque la ficha es una pasada breve.
