@@ -72,7 +72,7 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 | Diseño visual | Oscuro por defecto con tema claro según el sistema; definido en [`design.md`](design.md) |
 | Legal | Política de privacidad, política de cookies y términos de uso (República Dominicana, Ley 172-13) |
 | Uso comercial | **No** está previsto cobrar |
-| Repositorio | GitHub **privado** |
+| Repositorio | GitHub **público**. Vercel Hobby no deja colaborar en repos privados (solo despliega commits del dueño); en públicos la colaboración es gratis. Por eso nunca se suben secretos al repo |
 
 ### Descartado y por qué
 
