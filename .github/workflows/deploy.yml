@@ -36,6 +36,9 @@ jobs:
         with:
           python-version-file: .python-version
 
+      - name: Instalar uv (lo usa el constructor de Python de Vercel)
+        run: python -m pip install uv
+
       - name: Instalar la CLI de Vercel
         run: npm install --global vercel@63.1.2
 
