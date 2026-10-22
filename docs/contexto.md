@@ -1,7 +1,7 @@
 # CompaBook — Contexto del proyecto
 
 > Referencia principal del proyecto para el equipo (Diego Rodriguez y Emile Rosario) y para Claude Code.
-> **Estado:** diseño funcional y técnico decidido; replanteado a multiusuario el 2026-10-22 y revisado el mismo día. Aún no se ha escrito código.
+> **Estado:** diseño funcional y técnico aprobado por el equipo el 2026-10-22 (PR #1). Siguiente: Fase 4. Aún no se ha escrito código.
 > Nombre del producto: **CompaBook**. La sección donde el usuario guarda sus conceptos se llama «Cuaderno» (*Notebook* en inglés).
 
 ### Prioridad entre documentos
@@ -302,7 +302,7 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 |---|---|---|
 | 1. Análisis | Revisión de contexto, diseño y entorno | ✅ |
 | 2. Diseño técnico | Datos, API, flujos, criterios | ✅ (revisado) |
-| 3. Aprobación | Revisión del equipo | ⏳ |
+| 3. Aprobación | Revisión del equipo | ✅ (PR #1, 2026-10-22) |
 | 4. Fundamentos y prueba de riesgos | Estructura, CI, Docker local, FastAPI, SQLAlchemy + Alembic, frontend base con i18n y tema, despliegue en Vercel. **Prueba de concepto** de lo que puede tumbar la arquitectura: FastAPI bajo `/api` en Vercel, cookie en Safari con la PWA instalada, push al iPhone y `pg_cron` → `pg_net` → Vercel | |
 | 5. Cuentas | Registro, verificación por código, login, recuperación, idioma, eliminar cuenta, límites de intentos | |
 | 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento, búsqueda y eliminación, límite diario | |
