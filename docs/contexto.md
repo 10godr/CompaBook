@@ -1,33 +1,36 @@
-# Knowledge Hub — Contexto del proyecto para Claude Code
+# Knowledge Hub — Contexto del proyecto
 
-> Documento de contexto consolidado a partir de la conversación de diseño. Es la referencia principal para desarrollar el MVP con Claude Code.
-> **Estado:** diseño funcional y técnico decidido. Aún no se ha escrito código.
+> Referencia principal del proyecto para el equipo (Diego Rodriguez y Emile Rosario) y para Claude Code.
+> **Estado:** diseño funcional y técnico decidido; replanteado a multiusuario el 2026-10-23. Aún no se ha escrito código.
+> «Knowledge Hub» y «Cuaderno» son nombres provisionales.
 
 ---
 
-## 0. Instrucciones para Claude Code (leer primero)
+## 0. Forma de trabajo
 
-1. **No modifiques archivos todavía.** Primero analiza este documento, el entorno y la referencia de frontend que te proporcione el usuario.
-2. **Plantea dudas antes de desarrollar.** Si algo es ambiguo, pregunta; no tomes decisiones importantes por tu cuenta.
-3. **Presenta un plan de implementación** (entidades, endpoints, servicios, variables de entorno, orden de trabajo) y espera aprobación explícita.
-4. **Avisa justo antes de empezar a implementar.**
-5. **Trabaja por fases y funcionalidades**, probando cada parte antes de continuar. Commits pequeños.
-6. **Al entregar cada fase**, documenta: archivos modificados, pruebas realizadas, configuración necesaria y pendientes reales.
-7. El usuario está aprendiendo: explica las decisiones relevantes de forma clara.
+1. **No se escribe código sin aprobación explícita.** Primero se analiza, se plantean dudas y se presenta un plan.
+2. **Se trabaja por fases**, probando cada parte antes de continuar.
+3. **Git:** una rama por tarea (`docs/...`, `feat/...`, `fix/...`) y se integra a `main` mediante Pull Request revisado por el otro miembro. Commits pequeños y en español.
+4. **Al cerrar cada fase** se documenta: archivos modificados, pruebas realizadas, configuración necesaria y pendientes reales.
+5. El equipo está aprendiendo: las decisiones relevantes se explican.
 
 ---
 
 ## 1. Visión del producto
 
-Aplicación **personal** de aprendizaje (potencialmente multiusuario en el futuro) donde el usuario:
+Aplicación web **multiusuario** para entender conceptos rápido. No es un curso ni sigue lecciones: es una pasada breve para entender algo y guardarlo.
 
-1. **Captura** un concepto (por texto o dictado con Siri), p. ej. «CI/CD».
-2. El concepto se **guarda inmediatamente**, aunque la IA falle o tarde.
-3. Un agente de IA **genera automáticamente una ficha de aprendizaje**: explicación, usos, ejemplo práctico, conceptos relacionados, recursos (videos en español) y preguntas de repaso.
-4. El usuario **selecciona qué estudiar** y **programa sesiones manualmente**.
-5. Recibe una **notificación push** que lo lleva a su sesión con los conceptos seleccionados.
-
-Estilo de producto: herramienta personal de conocimiento, no plataforma educativa tradicional.
+1. El usuario se **registra** (email + contraseña, verificado con código) y elige su **idioma: español o inglés**.
+2. **Escribe o dicta (Siri)** un concepto, p. ej. «CI/CD». Puede escribirlo en cualquier idioma.
+3. El concepto se **guarda inmediatamente**, aunque la IA falle o tarde.
+4. Un agente de IA genera, **en el idioma del usuario**, una ficha breve:
+   - **Qué es** (definición).
+   - **Para qué sirve.**
+   - **Un ejemplo.**
+   - **2 videos de YouTube** en su idioma.
+5. Mientras se genera, se ve un **panel de carga animado**; la app nunca se congela.
+6. La ficha queda **guardada en su Cuaderno**. Ahí termina ese concepto: el usuario decide si ve los videos o vuelve a leerla.
+7. El usuario elige **a qué hora y qué días** quiere un **recordatorio** para repasar su Cuaderno.
 
 ---
 
@@ -35,33 +38,36 @@ Estilo de producto: herramienta personal de conocimiento, no plataforma educativ
 
 | Tema | Decisión |
 |---|---|
-| Plataforma | **PWA** instalable en iPhone y usable en computadora (Windows) |
-| Agente IA | **Generación automática** de fichas al guardar un concepto |
-| Proveedor IA | **Gemini API, nivel gratuito** (proveedor intercambiable en el diseño) |
-| Recordatorios | **Notificaciones push propias** de la PWA, enviadas desde el servidor |
-| Uso | Personal ahora; arquitectura preparada para multiusuario |
-| Estudio | **Selección y horarios manuales** (sin repaso espaciado en el MVP) |
-| Voz | **Atajo de Siri** (Apple Shortcuts) que envía el concepto al backend |
-| Frontend | Lo desarrolla el usuario aparte con Claude Code **a partir de una referencia visual propia** |
+| Usuarios | **Multiusuario** con cuentas propias; cada usuario solo ve sus datos |
+| Plataforma | **PWA** instalable en iPhone y usable en computadora |
+| Login | **Propio** (sin Supabase Auth): email + contraseña, verificación por código, recuperación de contraseña. Solo email por ahora |
+| Sesión | **Cookie segura `httpOnly`** con JWT; sin cookies de analítica ni publicidad |
+| Base de datos | **PostgreSQL alojado en Supabase**, accedido con **SQLAlchemy** y migraciones con **Alembic** |
+| Uso de Supabase | Solo como **base de datos** y **`pg_cron`** (reloj). No se usa su Auth ni su API automática |
 | Backend | **Python + FastAPI** |
-| BD y auth | **Supabase** (PostgreSQL + autenticación + RLS) |
-| Videos | **YouTube Data API**, priorizando español |
-| Repositorio | GitHub **privado** inicialmente (el usuario decidirá luego si lo hace público) |
-| Herramientas de desarrollo | Claude Code (desarrollo/integración) y Gemini Pro (consulta, revisión, investigación) |
-| Hosting | **Vercel** (Hobby) para la PWA y para FastAPI como funciones serverless |
-| Scheduler / worker | **Supabase `pg_cron` + `pg_net`**: cada minuto llama a `POST /internal/tick` (protegido con secreto), que procesa jobs, reintenta fallos y envía push |
-| Sistema de diseño | Estilo Morphic (`docs/design.md`) adaptado: cuerpo de lectura a 16px, gris más claro en fichas y **colores de estado contenidos** (error/éxito) |
-| Profundidad de fichas | De lo básico hasta un ejemplo técnico real |
+| Frontend | **React + TypeScript + Vite** (PWA) |
+| Hosting | **Vercel** (Hobby), subdominio `*.vercel.app`. Sin dominio propio por ahora |
+| Correos | **Gmail del proyecto** por SMTP con contraseña de aplicación, detrás de `EmailProvider` (migrable a Resend cuando haya dominio) |
+| IA | **Gemini API, nivel gratuito**, detrás de `AIProvider` |
+| Videos | **YouTube Data API**, 2 videos en el idioma del usuario, **reutilizando** resultados ya buscados |
+| Idiomas | Español e inglés, para la interfaz y para el contenido |
+| Recordatorios | Notificaciones **Web Push**: una hora al día y días de la semana elegidos por el usuario |
+| Voz | **Atajo de Siri** con token personal por usuario |
+| Límites de uso | **Ninguno por ahora**; se prueba con pocos usuarios |
+| Legal | Política de privacidad, política de cookies y términos de uso (República Dominicana, Ley 172-13) |
+| Uso comercial | **No** está previsto cobrar |
+| Repositorio | GitHub **privado** |
 
-### Decisiones explícitamente descartadas y por qué
+### Descartado y por qué
 
-- **Claude Code como motor de IA en producción: NO.** Claude Code construye el agente, pero el agente debe tener su propio mecanismo de ejecución (API). La suscripción de Claude no incluye API gratuita; la API de Anthropic se factura aparte. Ejecutarlo desde la computadora del usuario obligaría a mantenerla encendida.
-- **Gemini Pro (suscripción) ≠ Gemini API.** Son servicios distintos; se usará la cuota gratuita de la API.
-- **Ollama / modelo local: NO en el MVP.** Requiere la computadora encendida y complica el uso desde iPhone.
-- **Sistema multiagente autónomo: NO.** Basta un flujo definido con un modelo y herramientas concretas.
-- **Temporizadores JavaScript en cliente para recordatorios: NO.** Los recordatorios deben ejecutarse en el servidor.
-- **Cron de Vercel Hobby: NO** como base de recordatorios (frecuencia máxima diaria, precisión limitada).
-- **GitHub Actions programado: NO.** En repo privado la cuota gratuita (2.000 min/mes) no alcanza para ejecuciones cada pocos minutos, y los schedules suelen retrasarse.
+- **Supabase Auth:** el equipo prefiere construir el login propio para aprender y no depender del proveedor.
+- **Sesiones de estudio y selección de conceptos:** sustituidas por un recordatorio diario simple.
+- **Explicación por niveles, preguntas de repaso, conceptos relacionados, categorías y etiquetas:** fuera, porque la ficha es una pasada breve.
+- **Editar o regenerar conceptos:** el Cuaderno solo permite buscar y eliminar. Sí se permite **reintentar** una ficha que falló.
+- **Resend:** requiere dominio propio; se usará cuando exista.
+- **Claude Code como motor de IA en producción:** la IA necesita su propia API; la suscripción de Claude no la incluye.
+- **Ollama / modelo local:** requiere una computadora encendida.
+- **Cron de Vercel Hobby y GitHub Actions como reloj:** frecuencia o cuota insuficientes.
 
 ---
 
@@ -71,181 +77,194 @@ Estilo de producto: herramienta personal de conocimiento, no plataforma educativ
 
 | Área | Funcionalidad |
 |---|---|
-| Captura | Crear conceptos por texto y mediante atajo de Siri |
-| Biblioteca | Consultar, buscar, filtrar, ordenar, editar y eliminar conceptos |
-| IA | Generar fichas automáticamente; reintentar si falla |
-| Recursos | Videos de YouTube en español con enlaces reales y verificables |
-| Organización | Categorías, etiquetas y estado de aprendizaje |
-| Estudio | Seleccionar conceptos y programar sesiones manualmente |
-| Recordatorios | Crear horarios y recibir notificaciones push de la PWA |
+| Cuenta | Registro con verificación por código, login, logout, recuperar contraseña, cambiar idioma, eliminar cuenta y datos |
+| Idioma | Interfaz detectada del dispositivo + elección es/en |
+| Captura | Crear conceptos por texto y por atajo de Siri |
+| IA | Ficha breve automática; panel de carga; botón **Reintentar** si falla |
+| Videos | 2 videos con miniatura y título, uno al lado del otro; al hacer clic abren YouTube |
+| Cuaderno | Listado, búsqueda y eliminación de conceptos |
+| Recordatorios | Hora diaria + días de la semana; notificación push |
 | Instalación | PWA instalable en iPhone y usable en computadora |
-| Privacidad | Biblioteca privada mediante autenticación |
+| Legal | Privacidad, cookies y términos, en es/en |
 
-### Fuera del MVP (segunda etapa o más adelante)
+### Fuera del MVP
 
-- Repaso espaciado basado en algoritmos de memoria.
-- Cuestionarios adaptativos.
-- Sincronización (bidireccional) con Apple Recordatorios.
+- Login con Google u otros proveedores.
+- Límites de uso por usuario.
+- Dominio propio y correos con Resend.
+- Repaso espaciado, cuestionarios, sesiones de estudio.
 - App nativa de iOS.
-- Integración nativa avanzada con Siri.
-- Sistema multiusuario completo con roles y administración.
-- Generación de podcasts, audio o video propios.
-- Sistemas de agentes autónomos colaborativos.
+- Más idiomas.
 
 ---
 
 ## 4. Arquitectura
 
 ```
-[PWA React/TS/Vite]  ──HTTP──►  [FastAPI backend]  ──►  [Supabase: Postgres + Auth]
-        ▲                            │
-        │ push                       ├──► Gemini API (fichas, salida estructurada)
-        │                            ├──► YouTube Data API (videos reales)
-[Atajo de Siri] ──HTTP──►            └──► Worker/scheduler: tareas pendientes,
-                                          reintentos y envío de Web Push
+[PWA React/TS/Vite]  ──HTTPS + cookie──►  [FastAPI en Vercel]
+        ▲                                     │ SQLAlchemy
+        │ Web Push                            ▼
+[Atajo de Siri] ──HTTPS + token──►     [PostgreSQL en Supabase]
+                                              │ pg_cron (cada minuto)
+                                              ▼
+                                     POST /internal/tick
+                                       ├─► Gemini API (fichas)
+                                       ├─► YouTube Data API (videos)
+                                       └─► Web Push (recordatorios)
+                    FastAPI ──SMTP──► Gmail del proyecto (códigos y recuperación)
 ```
 
-- **Frontend:** React + TypeScript + Vite (PWA). Diseño visual a cargo del usuario con su referencia.
-- **Backend:** Python + FastAPI — autenticación, reglas de negocio, API, coordinación de tareas, llamadas a servicios externos.
-- **Supabase:** PostgreSQL, usuarios, permisos (Row Level Security).
-- **Procesamiento y notificaciones:** en infraestructura de servidor, **sin depender de que la PWA o la computadora estén abiertas**.
-- **Contrato de API** entre frontend y backend definido desde el principio para que evolucionen por separado.
-- **Proveedor de IA detrás de una interfaz/abstracción** (p. ej. `AIProvider`) para poder cambiar Gemini por otro en el futuro.
+### Cómo se usan PostgreSQL, Supabase y SQLAlchemy
+
+| Pieza | Papel |
+|---|---|
+| **PostgreSQL** | Motor de base de datos: tablas y datos |
+| **Supabase** | Aloja ese PostgreSQL (panel web, copias de seguridad) y aporta `pg_cron` |
+| **SQLAlchemy** | Librería con la que FastAPI lee y escribe usando clases de Python |
+| **Alembic** | Migraciones: historial versionado de cambios en las tablas |
+
+- El backend se conecta con `DATABASE_URL` a través del **pooler de Supabase** (modo transacción, puerto 6543), necesario en funciones serverless.
+- La **API automática de Supabase se desactiva** y las tablas no tienen acceso público: **solo el backend toca la base de datos**.
+- El aislamiento entre usuarios se hace en el backend: **toda consulta filtra por `user_id`** mediante una capa de acceso común.
+- El código no depende de Supabase: cambiar de proveedor de PostgreSQL es cambiar `DATABASE_URL`.
 
 ---
 
 ## 5. Flujos clave
 
-### 5.1 Captura y generación de ficha
+### 5.1 Registro e idioma
 
-1. Guardar el concepto en BD (**siempre primero**).
-2. Crear una tarea de generación (tabla de jobs).
-3. Solicitar a Gemini una **respuesta estructurada** (JSON con esquema).
-4. **Validar** la respuesta y guardarla como ficha (versionada).
-5. Buscar videos reales en YouTube (español) y guardarlos.
-6. Mostrar el resultado en la biblioteca.
-7. Permitir **reintentar** si algo falla.
+1. La web arranca en el **idioma del dispositivo** (`navigator.language`): inglés si empieza por `en`, español en otro caso.
+2. En el registro se pide email, contraseña e **idioma (Español / English)**, preseleccionado con el del dispositivo.
+3. Junto al selector, una nota breve:
+   - es: «Puedes escribir tus conceptos en cualquier idioma; te los explicaremos en el idioma que elijas.»
+   - en: «You can write your concepts in any language; we'll explain them in the language you choose.»
+4. Se envía un **código de 6 dígitos** al correo; la cuenta queda activa al introducirlo.
+5. El idioma se puede cambiar en Ajustes. Las fichas ya generadas se quedan en su idioma original.
 
-Estados de la ficha/tarea: `pending` → `processing` → `completed` | `failed`.
+### 5.2 Captura y ficha
 
-**Requisito de experiencia: panel de carga (obligatorio).** Mientras la ficha se genera (puede tardar hasta ~1 minuto), la interfaz **nunca debe verse congelada**:
-- El concepto aparece al instante en la biblioteca con su estado visible.
-- La ficha muestra un panel de carga animado y vivo (skeleton/progreso por etapas: «En cola» → «Generando explicación» → «Buscando videos» → «Listo»), con textos cercanos y en español.
-- El frontend consulta el estado periódicamente (polling) y se actualiza solo al completarse, sin recargar.
-- La app sigue siendo usable mientras tanto (se puede navegar y añadir más conceptos).
-- Si falla, se muestra un mensaje claro y el botón de reintentar.
+1. Guardar el concepto (**siempre primero**).
+2. Crear un trabajo en la cola.
+3. El reloj (`pg_cron`) llama cada minuto a `/internal/tick`, que pide a Gemini una **respuesta estructurada** en el idioma del usuario.
+4. Validar y guardar la ficha.
+5. Obtener 2 videos: **reutilizar** si ya se buscó ese concepto en ese idioma; si no, buscar en YouTube y guardar en caché.
+6. Si algo falla, reintentar automáticamente; al agotar intentos, mostrar **Reintentar**.
 
-### 5.2 Notificaciones programadas
+Estados: `pending` → `processing` → `completed` | `failed`.
 
-1. Instalar la PWA en el iPhone (pantalla de inicio; Web Push soportado desde iOS 16.4).
-2. Solicitar permiso de notificaciones **mediante una acción explícita del usuario** (botón).
-3. Registrar la suscripción push (Web Push / VAPID) en el backend.
-4. Guardar sesiones con fecha, hora, zona horaria y conceptos.
-5. Un proceso programado en el servidor envía la notificación cuando corresponde; al tocarla, abre la sesión.
+**Panel de carga (obligatorio).** Mientras se genera la ficha, la interfaz nunca debe verse congelada:
+- El concepto aparece al instante en el Cuaderno con su estado.
+- Panel animado por etapas: «En cola» → «Escribiendo la explicación» → «Buscando videos» → «¡Listo!».
+- El frontend consulta el estado periódicamente y se actualiza solo.
+- La app sigue siendo usable mientras tanto.
+- Si falla, mensaje claro y botón **Reintentar**.
 
-No se promete precisión al segundo; depende del proveedor de ejecución y del sistema push.
+### 5.3 Recordatorios
 
-### 5.3 Atajo de Siri
+1. Con la PWA instalada (en iPhone, Web Push requiere iOS 16.4+ y la app en la pantalla de inicio), el usuario activa las notificaciones **con un botón**.
+2. Elige **hora** y **días de la semana**; la zona horaria se toma del dispositivo.
+3. El reloj envía la notificación cuando toca, p. ej.: «Tienes 12 conceptos en tu Cuaderno — repasa "CI/CD"» (uno al azar).
+4. Si el Cuaderno está vacío no se envía nada. Tocarla abre el concepto sugerido.
 
-- Atajo de Apple Shortcuts que dicta un texto y hace un `POST` autenticado al backend para crear el concepto.
-- Requiere definir un mecanismo de autenticación apto para el atajo (p. ej. token personal revocable). **Pendiente de diseñar.**
+### 5.4 Atajo de Siri
+
+- Cada usuario genera un **token personal revocable** en Ajustes (se guarda solo su hash).
+- El atajo dicta el texto y hace `POST` al backend con ese token.
+- Se entrega una guía paso a paso para crear el atajo.
 
 ---
 
-## 6. Modelo de datos inicial (PostgreSQL)
+## 6. Modelo de datos (resumen)
 
 | Tabla | Contenido |
 |---|---|
-| `users` | Cuenta, preferencias, zona horaria, configuración de estudio |
-| `concepts` | Título, descripción original, categoría, etiquetas, estado de aprendizaje, fecha de creación, propietario |
-| `concept_content` | Explicación (por niveles), utilidad, ejemplo real, conceptos relacionados, preguntas de repaso, versión de la ficha |
-| `concept_resources` *(sugerida)* | Videos: título, canal, URL, id de YouTube, idioma |
-| `study_sessions` | Fecha, hora, zona horaria, estado, conceptos seleccionados (relación N:M con `concepts`) |
-| `push_subscriptions` | Suscripciones de dispositivos y estado |
-| `processing_jobs` | Tipo de tarea, estado, intentos, errores, timestamps |
+| `users` | Email, hash de contraseña, idioma, zona horaria, email verificado, fechas |
+| `email_codes` | Códigos de verificación y recuperación (hash, propósito, caducidad, intentos) |
+| `concepts` | Título, texto original, idioma de la ficha, origen (app/siri), propietario |
+| `concept_cards` | Ficha generada: qué es, para qué sirve, ejemplo |
+| `video_cache` | Videos por concepto normalizado + idioma, compartidos para reutilizar |
+| `processing_jobs` | Cola de trabajos: estado, etapa, intentos, errores |
+| `reminder_settings` | Hora, días, zona horaria, activo |
+| `push_subscriptions` | Dispositivos suscritos a notificaciones |
+| `api_tokens` | Tokens personales para Siri (hash) |
 
-Reglas:
-- Separar conceptos, contenido y sesiones: un concepto puede estar en varias sesiones sin duplicarse.
-- **Cada registro tiene propietario** (`user_id`) y se aplican **permisos a nivel de BD (RLS)** aunque hoy haya un solo usuario.
-- Migraciones en `supabase/migrations/`.
-
----
-
-## 7. Contenido de la ficha generada por IA
-
-- **Profundidad:** desde lo básico hasta un ejemplo técnico real, sin asumir conocimientos avanzados (opción recomendada; confirmar con el usuario).
-- Secciones: explicación por niveles, para qué sirve/usos, ejemplo de uso real, conceptos relacionados, preguntas de repaso.
-- Idioma: español.
-- **Los videos NO los inventa la IA**: deben provenir de resultados reales de la YouTube Data API. Nunca mostrar como verificado un enlace sugerido por el modelo.
+Detalle en [`diseno-tecnico.md`](diseno-tecnico.md).
 
 ---
 
-## 8. Pantallas (referencia funcional; el diseño visual lo aporta el usuario)
+## 7. Contenido de la ficha
 
-- **Inicio:** conceptos pendientes, próxima sesión, acceso rápido para añadir concepto, resumen de aprendizaje.
-- **Biblioteca:** buscador, filtros por categoría y estado, orden por fecha o nombre, acciones editar/eliminar/regenerar.
-- **Ficha:** explicación por niveles, ejemplo real, videos y recursos, preguntas de repaso, botón «marcar como aprendido».
-- **Planificador:** seleccionar conceptos, programar fecha y hora, activar/cancelar recordatorios, historial de sesiones.
+- Idioma: el del usuario (`es` o `en`), sin importar en qué idioma se escribió el concepto.
+- Secciones: **qué es**, **para qué sirve**, **ejemplo**. Breve: se lee en un par de minutos.
+- **Los videos no los inventa la IA**: vienen de la YouTube Data API.
+- Videos: 2 tarjetas **una al lado de la otra** (apiladas en móvil), con **miniatura y título debajo**; al hacer clic se abre YouTube en una pestaña nueva.
 
 ---
 
-## 9. Estructura de repositorio orientativa
+## 8. Pantallas
+
+- **Bienvenida / Login / Registro / Verificar código / Recuperar contraseña.**
+- **Inicio:** campo para añadir un concepto y los últimos conceptos.
+- **Cuaderno:** buscador y lista; eliminar.
+- **Ficha:** qué es, para qué sirve, ejemplo, 2 videos; panel de carga mientras se genera.
+- **Ajustes:** idioma, recordatorios (hora y días), notificaciones, token de Siri, cerrar sesión, eliminar cuenta.
+- **Legal:** privacidad, cookies, términos.
+
+Diseño visual: [`design.md`](design.md) (estilo Morphic adaptado: lectura a 16px, gris más claro en fichas, colores de estado contenidos).
+
+---
+
+## 9. Estructura del repositorio
 
 ```
-knowledge-hub/
-├── frontend/
-│   ├── src/{components,pages,services,types}/
-│   ├── public/
-│   └── package.json
+/
+├── frontend/          React + TS + Vite (PWA)
 ├── backend/
 │   ├── app/{api,models,services,workers}/
-│   ├── tests/
-│   └── requirements.txt
-├── supabase/migrations/
+│   ├── alembic/       migraciones
+│   └── tests/
 ├── docs/
 ├── .gitignore
-├── .env.example
 └── README.md
 ```
 
-No es necesario crear todos los directorios desde el primer día. El README debe explicar: ejecución local, variables de entorno, migraciones y despliegue.
+---
+
+## 10. Seguridad y restricciones
+
+1. Contraseñas con **argon2**; nunca en texto plano ni en logs.
+2. Sesión en cookie `httpOnly`, `Secure`, `SameSite=Lax`; protección CSRF en peticiones que modifican datos.
+3. Códigos de email y tokens se guardan **hasheados**, caducan y tienen límite de intentos.
+4. Límite de intentos en login, registro y envío de códigos para evitar abuso.
+5. **Toda consulta filtra por `user_id`**; se prueba con dos cuentas que nadie ve datos ajenos.
+6. Secretos solo en variables de entorno del backend; nunca en el frontend ni en GitHub.
+7. Guardar el concepto antes de llamar a la IA.
+8. Manejar errores de cuota de Gemini y YouTube (429) con reintentos y espera.
+9. **Privacidad:** el nivel gratuito de Gemini puede usar el contenido para mejorar productos de Google; se informa en la política de privacidad.
+10. El usuario puede **eliminar su cuenta y todos sus datos**.
 
 ---
 
-## 10. Reglas de seguridad y restricciones (obligatorias)
+## 11. Plan por fases
 
-1. **Comprobar los límites y modelos disponibles de Gemini API (nivel gratuito) antes de implementar**; no asumir cuota ilimitada. Manejar errores de cuota (429) con reintentos/backoff.
-2. **Guardar el concepto antes de llamar a la IA**; gestionar errores sin perder información.
-3. **La clave de Gemini (y cualquier secreto) solo en el backend**: nunca en el frontend ni en GitHub. Usar `.env` + `.env.example`.
-4. El repositorio no contendrá contraseñas, claves privadas, tokens ni credenciales de BD (aunque sea privado).
-5. Tener en cuenta que el **nivel gratuito de Gemini puede usar el contenido para mejorar productos de Google** (privacidad).
-6. Respetar cuotas y condiciones de la YouTube Data API.
-7. Minimizar costos: priorizar servicios gratuitos. La IA gratuita no implica que alojamiento, scheduler, push o YouTube sean gratis; elegir proveedores con capa gratuita y señalar cualquier posible costo antes de adoptarlo.
-
----
-
-## 11. Plan de implementación por fases
-
-1. **Análisis** (sin modificar archivos): revisar este documento, la referencia de frontend, el entorno y herramientas.
-2. **Diseño técnico:** entidades, endpoints (contrato de API), servicios externos, variables de entorno, flujo de procesamiento, criterios de aceptación.
-3. **Aprobación:** plan completo + dudas + cambios previstos. Aviso explícito antes de implementar.
-4. **Fundamentos:** repositorio, frontend base, backend base, conexión con Supabase, auth.
-5. **Biblioteca:** CRUD, búsqueda, filtros de conceptos.
-6. **IA:** generación con Gemini, búsqueda de videos, manejo de errores y reintentos.
-7. **Estudio y notificaciones:** sesiones, suscripciones push, scheduler en servidor.
-8. **Siri:** endpoint + autenticación del atajo + guía para crear el atajo.
-9. **Pruebas y publicación:** verificar en Windows e iPhone, documentar y desplegar.
+| Fase | Contenido | Estado |
+|---|---|---|
+| 1. Análisis | Revisión de contexto, diseño y entorno | ✅ |
+| 2. Diseño técnico | Datos, API, flujos, criterios | ✅ (replanteado) |
+| 3. Aprobación | Revisión del equipo | ⏳ |
+| 4. Fundamentos | Estructura, FastAPI, SQLAlchemy + Alembic con Supabase, frontend base con i18n, despliegue en Vercel | |
+| 5. Cuentas | Registro, verificación por código, login, recuperación, idioma, eliminar cuenta | |
+| 6. Cuaderno + IA | Crear concepto, cola, Gemini, videos, panel de carga, reintentar, búsqueda y eliminación | |
+| 7. Recordatorios | Ajustes de hora y días, push, envío desde el reloj | |
+| 8. Siri | Tokens personales, endpoint y guía del atajo | |
+| 9. Legal y publicación | Textos legales es/en, pruebas en Windows e iPhone, despliegue | |
 
 ---
 
-## 12. Decisiones pendientes (resolver con el usuario antes o durante la fase de diseño técnico)
+## 12. Pendientes
 
-- [x] **Hosting del backend y del worker/scheduler:** Vercel + Supabase `pg_cron`.
-- [x] **Hosting del frontend PWA:** Vercel.
-- [x] **Modelo concreto de Gemini:** `gemini-3.8-flash` con respaldo `gemini-3.5-flash-lite` (ver `diseno-tecnico.md`).
-- [x] **Profundidad de explicaciones:** de lo básico a ejemplo técnico real.
-- [ ] **Autenticación del atajo de Siri** (token personal, etc.).
-- [x] **Esquema JSON de la ficha y contrato de API:** en `diseno-tecnico.md`.
-- [x] **Criterios de aceptación:** en `diseno-tecnico.md`.
-- [ ] Identidad visual: **la define el usuario** con su referencia (no decidir).
-- [ ] Visibilidad del repo: **privado**; el usuario lo gestionará después (no decidir).
+- [ ] Nombre definitivo del producto.
+- [ ] Crear el Gmail del proyecto (envíos y contacto legal) y su contraseña de aplicación.
+- [ ] Anotar los límites reales de Gemini al crear la clave en AI Studio.
+- [ ] Revisión de los textos legales por alguien con conocimiento jurídico antes de abrir al público.
