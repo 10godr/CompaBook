@@ -1,0 +1,21 @@
+# Base de datos local para desarrollo. Nunca se usa para producción.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: compabook
+      POSTGRES_PASSWORD: compabook
+      POSTGRES_DB: compabook
+    ports:
+      # 5433 en el host para no chocar con un PostgreSQL instalado en el equipo.
+      - "5433:5432"
+    volumes:
+      - compabook-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U compabook -d compabook"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  compabook-db:

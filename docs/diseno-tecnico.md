@@ -468,8 +468,8 @@ Las variables de cada entorno se configuran en Vercel por separado (*Preview* y 
 `backend/.env.example`
 
 ```
-DATABASE_URL=postgresql+psycopg://compabook:compabook@localhost:5432/compabook          # app (en Vercel: pooler 6543)
-DATABASE_URL_DIRECT=postgresql+psycopg://compabook:compabook@localhost:5432/compabook   # Alembic (en Supabase: 5432)
+DATABASE_URL=postgresql+psycopg://compabook:compabook@localhost:5433/compabook          # app (en Vercel: pooler 6543)
+DATABASE_URL_DIRECT=postgresql+psycopg://compabook:compabook@localhost:5433/compabook   # Alembic (en Supabase: 5432)
 APP_URL=http://localhost:5173
 COOKIE_SECURE=false
 SESSION_DAYS=30
