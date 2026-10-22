@@ -7,7 +7,8 @@ services:
       POSTGRES_PASSWORD: compabook
       POSTGRES_DB: compabook
     ports:
-      - "5432:5432"
+      # 5433 en el host para no chocar con un PostgreSQL instalado en el equipo.
+      - "5433:5432"
     volumes:
       - compabook-db:/var/lib/postgresql/data
     healthcheck:
