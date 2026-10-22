@@ -1,8 +1,8 @@
-# Knowledge Hub — Contexto del proyecto
+# CompaBook — Contexto del proyecto
 
 > Referencia principal del proyecto para el equipo (Diego Rodriguez y Emile Rosario) y para Claude Code.
 > **Estado:** diseño funcional y técnico decidido; replanteado a multiusuario el 2026-10-23. Aún no se ha escrito código.
-> «Knowledge Hub» y «Cuaderno» son nombres provisionales.
+> Nombre del producto: **CompaBook**. La sección donde el usuario guarda sus conceptos se llama «Cuaderno» (*Notebook* en inglés).
 
 ---
 
@@ -266,7 +266,7 @@ Diseño visual: [`design.md`](design.md) (estilo Morphic adaptado: lectura a 16p
 
 ## 12. Pendientes
 
-- [ ] Nombre definitivo del producto.
+- [x] Nombre del producto: **CompaBook**.
 - [ ] Crear el Gmail del proyecto (envíos y contacto legal) y su contraseña de aplicación.
 - [ ] Anotar los límites reales de Gemini al crear la clave en AI Studio.
 - [ ] Revisión de los textos legales por alguien con conocimiento jurídico antes de abrir al público.

@@ -1,4 +1,4 @@
-# Diseño técnico — Knowledge Hub (MVP multiusuario)
+# Diseño técnico — CompaBook (MVP multiusuario)
 
 > Fase 2 (replanteada el 2026-10-23). Define cómo se construye lo descrito en [`contexto.md`](contexto.md). Nada de esto está implementado todavía.
 
@@ -64,7 +64,7 @@ Funcionamiento:
 
 1. Al iniciar sesión se genera un token aleatorio (`secrets.token_urlsafe(32)`).
 2. En la base de datos se guarda **su hash SHA-256**, no el token.
-3. El token va al navegador en la cookie `kh_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 días.
+3. El token va al navegador en la cookie `cb_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 días.
 4. En cada petición se hashea la cookie y se busca la sesión vigente.
 
 ### 2.2 Contraseñas
@@ -83,7 +83,7 @@ Funcionamiento:
 ### 2.4 Protección contra abuso y CSRF
 
 - Login: tras 5 fallos seguidos, la cuenta se bloquea 15 minutos (`failed_logins`, `locked_until`).
-- CSRF: `SameSite=Lax` + el backend exige la cabecera `X-Requested-With: knowledge-hub` en todo `POST/PATCH/DELETE` con cookie. Un formulario de otro sitio no puede enviar esa cabecera.
+- CSRF: `SameSite=Lax` + el backend exige la cabecera `X-Requested-With: compabook` en todo `POST/PATCH/DELETE` con cookie. Un formulario de otro sitio no puede enviar esa cabecera.
 
 ### 2.5 Flujos
 
@@ -331,7 +331,7 @@ Con esta lógica, si un tick se retrasa o falla, el siguiente envía el recordat
 
 ## 7. Contrato de API
 
-Base `/api/v1`. Autenticación por cookie `kh_session`, salvo donde se indica. Errores: `{ "error": { "code": "...", "message": "..." } }`.
+Base `/api/v1`. Autenticación por cookie `cb_session`, salvo donde se indica. Errores: `{ "error": { "code": "...", "message": "..." } }`.
 
 ### Cuenta
 
@@ -406,7 +406,7 @@ SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=
 SMTP_APP_PASSWORD=
-EMAIL_FROM_NAME=Knowledge Hub
+EMAIL_FROM_NAME=CompaBook
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:<gmail del proyecto>
@@ -432,7 +432,7 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 - **Marco:** República Dominicana, **Ley 172-13** de protección de datos personales.
 - **Responsable y contacto:** el Gmail del proyecto.
 - **Privacidad:** datos recogidos (email, idioma, zona horaria, conceptos, suscripciones push); finalidad; proveedores (Supabase, Vercel, Google Gemini, YouTube, Gmail); aviso de que el nivel gratuito de Gemini puede usar el contenido para mejorar productos de Google; derechos de acceso, rectificación y eliminación (eliminar cuenta en Ajustes o escribir al contacto).
-- **Cookies:** solo `kh_session` (estrictamente necesaria) y `localStorage` para el idioma antes de iniciar sesión. Sin analítica ni publicidad, así que no hace falta banner de consentimiento; basta un aviso informativo.
+- **Cookies:** solo `cb_session` (estrictamente necesaria) y `localStorage` para el idioma antes de iniciar sesión. Sin analítica ni publicidad, así que no hace falta banner de consentimiento; basta un aviso informativo.
 - **Términos:** uso personal y no comercial, contenido generado por IA que puede contener errores, servicio sin garantías durante las pruebas.
 - Al registrarse, casilla obligatoria: «Acepto los términos y la política de privacidad».
 

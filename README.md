@@ -1,6 +1,6 @@
-# Knowledge Hub
+# CompaBook
 
-> Nombre provisional.
+> **CompaBook**: tu compañero para entender conceptos rápido.
 
 Una app web para entender conceptos rápido. Escribes (o le dictas a Siri) algo como «CI/CD», y una IA te explica en tu idioma qué es, para qué sirve y un ejemplo, con 2 videos de YouTube para profundizar. Todo queda guardado en tu Cuaderno, y puedes elegir a qué hora y qué días quieres que te recuerde repasarlo.
 
