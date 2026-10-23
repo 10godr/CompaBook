@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import Home from './pages/Home'
 import Notebook from './pages/Notebook'
 import PruebaCookie from './pages/PruebaCookie'
+import PruebaPush from './pages/PruebaPush'
 import Settings from './pages/Settings'
 
 function App() {
@@ -15,6 +16,7 @@ function App() {
           <Route path="cuaderno" element={<Notebook />} />
           <Route path="ajustes" element={<Settings />} />
           <Route path="prueba-cookie" element={<PruebaCookie />} />
+          <Route path="prueba-push" element={<PruebaPush />} />
         </Route>
       </Routes>
     </BrowserRouter>
