@@ -1,20 +1,21 @@
-import { useEffect, useState } from 'react'
+import { BrowserRouter, Route, Routes } from 'react-router-dom'
+
+import Layout from './components/Layout'
+import Home from './pages/Home'
+import Notebook from './pages/Notebook'
+import Settings from './pages/Settings'
 
 function App() {
-  const [health, setHealth] = useState<string>('consultando…')
-
-  useEffect(() => {
-    fetch('/api/v1/health')
-      .then((res) => res.json())
-      .then((data) => setHealth(JSON.stringify(data)))
-      .catch(() => setHealth('error al conectar con la API'))
-  }, [])
-
   return (
-    <main>
-      <h1>CompaBook</h1>
-      <p>API: {health}</p>
-    </main>
+    <BrowserRouter>
+      <Routes>
+        <Route element={<Layout />}>
+          <Route index element={<Home />} />
+          <Route path="cuaderno" element={<Notebook />} />
+          <Route path="ajustes" element={<Settings />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
   )
 }
 

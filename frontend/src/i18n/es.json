@@ -1,0 +1,29 @@
+{
+  "nav": {
+    "home": "Inicio",
+    "notebook": "Cuaderno",
+    "settings": "Ajustes",
+    "label": "Navegación principal"
+  },
+  "home": {
+    "titleLine1": "Entiende cualquier concepto",
+    "titleLine2": "en un par de minutos."
+  },
+  "notebook": {
+    "title": "Cuaderno"
+  },
+  "settings": {
+    "title": "Ajustes",
+    "language": "Idioma",
+    "theme": "Tema",
+    "themeOptions": {
+      "system": "Sistema",
+      "dark": "Oscuro",
+      "light": "Claro"
+    }
+  },
+  "languages": {
+    "es": "Español",
+    "en": "English"
+  }
+}
