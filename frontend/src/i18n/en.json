@@ -1,0 +1,29 @@
+{
+  "nav": {
+    "home": "Home",
+    "notebook": "Notebook",
+    "settings": "Settings",
+    "label": "Main navigation"
+  },
+  "home": {
+    "titleLine1": "Understand any concept",
+    "titleLine2": "in a couple of minutes."
+  },
+  "notebook": {
+    "title": "Notebook"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "theme": "Theme",
+    "themeOptions": {
+      "system": "System",
+      "dark": "Dark",
+      "light": "Light"
+    }
+  },
+  "languages": {
+    "es": "Español",
+    "en": "English"
+  }
+}
