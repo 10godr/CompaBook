@@ -16,6 +16,11 @@ class Settings(BaseSettings):
     # Solo en local se desactiva Secure, porque http://localhost no es HTTPS.
     cookie_secure: bool = True
 
+    vapid_public_key: str | None = None
+    vapid_private_key: str | None = None
+    # Los servicios de push exigen un contacto: un mailto: o una URL https.
+    vapid_subject: str = "https://compabook.vercel.app"
+
 
 @lru_cache
 def get_settings() -> Settings:

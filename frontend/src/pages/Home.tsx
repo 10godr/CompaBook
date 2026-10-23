@@ -15,6 +15,9 @@ export default function Home() {
       <Link to="/prueba-cookie" className="poc-link">
         Prueba de cookie
       </Link>
+      <Link to="/prueba-push" className="poc-link">
+        Prueba de push
+      </Link>
     </>
   )
 }

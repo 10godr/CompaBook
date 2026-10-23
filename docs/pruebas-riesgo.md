@@ -47,7 +47,48 @@ Usar siempre `https://compabook.vercel.app/prueba-cookie` (la preview de Vercel 
 
 ## 2. Push al iPhone
 
-_Pendiente._
+**Qué se comprueba:** que una notificación enviada desde el backend (`pywebpush` con claves VAPID) llega al iPhone con la PWA instalada, también con la app cerrada y la pantalla bloqueada. En iOS el push solo funciona en la PWA añadida a la pantalla de inicio (iOS 16.4 o superior), nunca en una pestaña de Safari.
+
+**Código temporal:** `backend/app/poc_push.py` (`/api/v1/poc/push/key` y `/send`), `frontend/public/sw.js` (service worker), `frontend/src/pages/PruebaPush.tsx` (`/prueba-push`).
+
+**Configuración previa en Vercel** (proyecto `compabook`, Settings → Environment Variables, entorno *Production*; después, *Redeploy*):
+
+| Variable | Valor |
+|---|---|
+| `VAPID_PUBLIC_KEY` | Clave pública (65 bytes en base64url) |
+| `VAPID_PRIVATE_KEY` | Clave privada (32 bytes en base64url). **Solo en Vercel**, nunca en el repositorio ni en un chat |
+
+`VAPID_SUBJECT` es opcional: por defecto es `https://compabook.vercel.app`.
+
+El envío solo admite suscripciones de los servicios de push de Apple, Google, Mozilla y Microsoft, para que el endpoint no sirva de proxy. No se guarda ninguna suscripción.
+
+### Procedimiento
+
+Usar `https://compabook.vercel.app` desde la **app instalada** (en Inicio, enlace «Prueba de push»). Si la app ya estaba instalada, cerrarla y abrirla para que cargue la versión nueva.
+
+| # | Pasos | Resultado esperado |
+|---|---|---|
+| P1 | **Ver estado** | «PWA instalada: sí», soporte de push «sí» |
+| P2 | **Activar notificaciones** y aceptar el aviso de iOS | Permiso `granted` y «Suscrito en web.push.apple.com» |
+| P3 | **Enviar ahora** con la app abierta | Respuesta `{"sent":true}` y llega la notificación |
+| P4 | **Enviar en 8 s** y cerrar la app deslizándola hacia arriba | La notificación llega con la app cerrada |
+| P5 | **Enviar en 8 s** y bloquear el teléfono | La notificación llega en la pantalla de bloqueo |
+| P6 | Tocar la notificación | Abre la app |
+| P7 | Pasadas varias horas, repetir P4 | Sigue llegando (la suscripción no caduca) |
+
+### Resultados
+
+| # | Resultado | Fecha | Notas |
+|---|---|---|---|
+| P1 | | | |
+| P2 | | | |
+| P3 | | | |
+| P4 | | | |
+| P5 | | | |
+| P6 | | | |
+| P7 | | | |
+
+**Conclusión:** _pendiente_
 
 ## 3. `pg_cron` → `pg_net` → Vercel
 

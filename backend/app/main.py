@@ -1,13 +1,14 @@
 from fastapi import APIRouter, FastAPI, HTTPException
 from sqlalchemy import text
 
-from app import poc
+from app import poc, poc_push
 from app.db import get_engine
 
 app = FastAPI(title="CompaBook API")
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(poc.router)
+router.include_router(poc_push.router)
 
 
 @router.get("/health")
