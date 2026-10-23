@@ -13,6 +13,8 @@ class Settings(BaseSettings):
 
     database_url: str | None = None
     database_url_direct: str | None = None
+    # Solo en local se desactiva Secure, porque http://localhost no es HTTPS.
+    cookie_secure: bool = True
 
 
 @lru_cache

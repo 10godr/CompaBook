@@ -274,6 +274,25 @@ h2 {
   color: var(--text-muted);
 }
 
+/* Botones: solo los de la página temporal de prueba; los definitivos llegan con las pantallas. */
+.card button {
+  min-height: var(--touch-min);
+  padding: 0 var(--space-4);
+  background: var(--accent);
+  color: #ffffff;
+  border: 0;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-weight: 500;
+}
+
+.card code {
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  color: var(--text-reading);
+  overflow-wrap: anywhere;
+}
+
 /* Ajustes */
 .card {
   background: var(--bg-card);
