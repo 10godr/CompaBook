@@ -80,15 +80,15 @@ Usar `https://compabook.vercel.app` desde la **app instalada** (en Inicio, enlac
 
 | # | Resultado | Fecha | Notas |
 |---|---|---|---|
-| P1 | | | |
-| P2 | | | |
-| P3 | | | |
-| P4 | | | |
-| P5 | | | |
-| P6 | | | |
-| P7 | | | |
+| P1 | ✅ | 2026-10-22 | Reportado por Emile: «funcionó todo» (sin detalle por paso) |
+| P2 | ✅ | 2026-10-22 | Idem |
+| P3 | ✅ | 2026-10-22 | Idem |
+| P4 | ✅ | 2026-10-22 | Idem |
+| P5 | ✅ | 2026-10-22 | Idem |
+| P6 | ✅ | 2026-10-22 | Idem |
+| P7 | Pendiente | | Repetir P4 pasadas varias horas y, mejor, al día siguiente |
 
-**Conclusión:** _pendiente_
+**Conclusión provisional (2026-10-22):** el push funciona de extremo a extremo con la PWA instalada: `pywebpush` con claves VAPID desde una función de Vercel, service worker propio y llegada con la app cerrada y con el teléfono bloqueado. Falta confirmar que la suscripción no caduca (P7). Para la Fase 7 hay que guardar las suscripciones por usuario y marcarlas inactivas si el servicio responde 404 o 410, como ya prevé `diseno-tecnico.md` §1.6.
 
 ## 3. `pg_cron` → `pg_net` → Vercel
 
