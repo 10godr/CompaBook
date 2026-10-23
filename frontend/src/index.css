@@ -293,6 +293,13 @@ h2 {
   overflow-wrap: anywhere;
 }
 
+.poc-link {
+  color: var(--accent-text);
+  min-height: var(--touch-min);
+  display: inline-flex;
+  align-items: center;
+}
+
 /* Ajustes */
 .card {
   background: var(--bg-card);
