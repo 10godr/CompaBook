@@ -33,7 +33,7 @@ Usar siempre `https://compabook.vercel.app/prueba-cookie` (la preview de Vercel 
 | A | ✅ `present: true`, `age_seconds: 197`, `renewed: false` | 2026-10-22 | Reportado por Emile; no recuerda si fue en Safari o ya en la app |
 | B | Sin probar | | |
 | C | La app instalada abre en `/` (`start_url`) y no tiene barra de direcciones: hizo falta un enlace temporal en Inicio (#9) | 2026-10-22 | «Modo PWA instalada: sí». No se anotó si la cookie de Safari se veía en la app; ver C2 |
-| C2 | Pendiente | | Con la cookie borrada en la app, crearla en Safari y mirar en la app el estado |
+| C2 | ✅ `present: false` en la app tras crear la cookie en Safari: **no comparten cookies** | 2026-10-22 | Con la cookie borrada en la app, se creó en Safari y se miró en la app. Es el comportamiento habitual de iOS. Efecto: quien instale la app debe iniciar sesión dentro de ella |
 | D | ✅ `present: true` tras crear la cookie en la app | 2026-10-22 | |
 | E | ✅ `present: true` tras cerrar y abrir la app | 2026-10-22 | |
 | F | ✅ La marca de `localStorage` sigue tras cerrar y abrir | 2026-10-22 | |
@@ -41,7 +41,7 @@ Usar siempre `https://compabook.vercel.app/prueba-cookie` (la preview de Vercel 
 | H | | | |
 | I | | | |
 
-**Conclusión provisional (2026-10-22):** la cookie de sesión con las opciones del diseño funciona en la PWA instalada y sobrevive a cerrar y abrir la app, con frontend y API en el mismo dominio. Siguen pendientes la renovación a las 24 h (G), la persistencia tras 8 días (H) y saber si la app comparte cookies con Safari (C2). Mientras no se completen G y H, la decisión de sesiones en base de datos con cookie sigue en pie pero no está cerrada.
+**Conclusión provisional (2026-10-22):** la cookie de sesión con las opciones del diseño funciona en la PWA instalada y sobrevive a cerrar y abrir la app, con frontend y API en el mismo dominio. Safari y la app instalada **no comparten cookies** (C2), así que la guía de instalación (Fase 9) debe avisar de que hay que iniciar sesión dentro de la app. Siguen pendientes la renovación a las 24 h (G) y la persistencia tras 8 días (H); el reloj de ambas arranca al crear la cookie dentro de la app, sin volver a crearla ni borrarla. Mientras no se completen G y H, la decisión de sesiones en base de datos con cookie sigue en pie pero no está cerrada.
 
 ---
 
