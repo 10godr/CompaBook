@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import and_, delete, or_, select
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import joinedload
@@ -41,6 +41,9 @@ class ConceptRepository:
             select(Concept)
             .where(Concept.id == concept_id, Concept.user_id == self.user_id)
             .options(joinedload(Concept.card), joinedload(Concept.job))
+            # Los cambios del trabajo se hacen con UPDATE directo: al volver a leer, que la
+            # sesión no devuelva el objeto viejo que ya tenía.
+            .execution_options(populate_existing=True)
         )
 
     def list_page(
@@ -75,6 +78,82 @@ class ConceptRepository:
             delete(Concept).where(Concept.id == concept_id, Concept.user_id == self.user_id)
         )
         return result.rowcount > 0
+
+    def attach_card(self, concept_id: uuid.UUID, card_id: uuid.UUID) -> None:
+        self.db.execute(
+            update(Concept)
+            .where(Concept.id == concept_id, Concept.user_id == self.user_id)
+            .values(card_id=card_id)
+        )
+
+    # --- Trabajos -------------------------------------------------------------------------
+
+    def claim_job(self, concept_id: uuid.UUID, now: datetime) -> bool:
+        """Toma el trabajo `pending` del concepto. False si no lo está o ya lo tiene otro proceso.
+
+        `SKIP LOCKED` hace que un segundo proceso no espere: pasa de largo y se entera de que
+        el trabajo ya no está libre.
+        """
+        job_id = self.db.scalar(
+            select(ProcessingJob.id)
+            .where(
+                ProcessingJob.concept_id == concept_id,
+                ProcessingJob.user_id == self.user_id,
+                ProcessingJob.status == "pending",
+            )
+            .with_for_update(skip_locked=True)
+        )
+        if job_id is None:
+            return False
+        self.db.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.id == job_id)
+            .values(status="processing", stage="writing", locked_at=now, updated_at=now)
+        )
+        return True
+
+    def complete_job(self, concept_id: uuid.UUID, now: datetime) -> None:
+        self._update_job(
+            concept_id,
+            status="completed",
+            stage="done",
+            locked_at=None,
+            last_error=None,
+            updated_at=now,
+        )
+
+    def fail_job(self, concept_id: uuid.UUID, error: str, now: datetime) -> None:
+        """Marca el trabajo como fallido. `error` es solo el tipo, nunca contenido."""
+        self.db.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.concept_id == concept_id, ProcessingJob.user_id == self.user_id)
+            .values(
+                status="failed",
+                locked_at=None,
+                last_error=error,
+                attempts=ProcessingJob.attempts + 1,
+                updated_at=now,
+            )
+        )
+
+    def reset_job(self, concept_id: uuid.UUID, now: datetime) -> None:
+        """Vuelve a dejar el trabajo en cola (Reintentar)."""
+        self._update_job(
+            concept_id,
+            status="pending",
+            stage="queued",
+            attempts=0,
+            next_run_at=now,
+            locked_at=None,
+            updated_at=now,
+        )
+
+    def _update_job(self, concept_id: uuid.UUID, **values: object) -> None:
+        self.db.execute(
+            update(ProcessingJob)
+            .where(ProcessingJob.concept_id == concept_id, ProcessingJob.user_id == self.user_id)
+            .values(**values)
+        )
 
 
 class ConceptCardRepository:

@@ -426,7 +426,9 @@ def change_password(
 def delete_account(
     db: DbSession, user: User, *, password: str, now: datetime | None = None
 ) -> None:
-    """Borra el usuario y, en cascada, sus sesiones y códigos (y más adelante sus conceptos).
+    """Borra el usuario y, en cascada, sus sesiones, códigos y conceptos.
+
+    Las fichas compartidas se quedan: no guardan datos de nadie.
 
     No toca `allowed_emails`: la invitación es del administrador, no del usuario.
     """

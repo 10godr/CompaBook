@@ -7,7 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as DbSession
 
 from app.models import AllowedEmail, User
-from app.services.ai import AIError, CardContent, GeneratedCard, normalize_slug
+from app.services.ai import CardContent, GeneratedCard, normalize_slug
 from app.services.email import EmailMessage
 
 HEADERS = {"X-Requested-With": "compabook"}
@@ -49,7 +49,7 @@ class FakeAIProvider:
 
     def __init__(self) -> None:
         self.calls: list[tuple[str, str]] = []  # (título, idioma) de cada llamada
-        self.error: AIError | None = None
+        self.error: Exception | None = None
         self.cards: dict[str, CardContent] = {}  # ficha a devolver para un título concreto
 
     def generate_card(self, title: str, language: str) -> GeneratedCard:

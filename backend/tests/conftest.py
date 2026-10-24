@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.config import get_settings
 from app.db import get_db, get_engine
 from app.main import app
-from app.services import accounts
+from app.services import accounts, concepts
 from app.services.ai import get_ai_provider
 from app.services.email import get_email_provider
 from tests.helpers import NOW, FakeAIProvider, FakeEmailProvider
@@ -51,6 +51,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
     """Reloj controlable: `clock["now"] = ...` adelanta o atrasa el tiempo de los servicios."""
     state = {"now": NOW}
     monkeypatch.setattr(accounts, "utcnow", lambda: state["now"])
+    monkeypatch.setattr(concepts, "utcnow", lambda: state["now"])
     return state
 
 

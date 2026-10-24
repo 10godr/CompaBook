@@ -9,7 +9,7 @@ from app.api.deps import current_user, require_csrf_header
 from app.api.validators import check_timezone
 from app.db import get_db
 from app.models import User
-from app.services import accounts
+from app.services import accounts, concepts
 from app.session_cookie import COOKIE_NAME, clear_session_cookie
 
 router = APIRouter(prefix="/me")
@@ -41,8 +41,9 @@ class DeleteBody(BaseModel):
 
 
 @router.get("")
-def me(user: User = Depends(current_user)) -> dict[str, object]:
-    return user_payload(user)
+def me(user: User = Depends(current_user), db: DbSession = Depends(get_db)) -> dict[str, object]:
+    # `usage` es el cupo del día, para el contador de la pantalla de inicio.
+    return {**user_payload(user), "usage": concepts.usage(db, user)}
 
 
 @router.patch("", dependencies=[Depends(require_csrf_header)])
