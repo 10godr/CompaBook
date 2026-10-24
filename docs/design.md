@@ -206,7 +206,7 @@ Todos: 16px de texto con peso 500, altura mínima de 44px, padding horizontal de
 ### Panel de carga
 
 - Ocupa el lugar de la ficha y tiene su misma forma: **skeleton** de un título y tres bloques de texto en `--bg-raised` con brillo animado.
-- Encima, la **barra de etapas**: cuatro pasos, «En cola», «Escribiendo», «Buscando videos» y «¡Listo!». Completado en `--status-success`, actual en `--status-progress` con pulso suave, pendiente en `--border-control`.
+- Encima, la **barra de etapas**: cuatro pasos, «En cola», «Escribiendo», «Buscando videos» y «¡Listo!». En la Fase 6a, que aún no busca videos, la barra tiene tres pasos (sin «Buscando videos»); el cuarto llega con la 6b. Completado en `--status-success`, actual en `--status-progress` con pulso suave, pendiente en `--border-control`.
 - Texto de la etapa actual (`body`, `--text-strong`) según la tabla de [`diseno-tecnico.md`](diseno-tecnico.md) §4.5, anunciado con `aria-live="polite"`.
 - Con `prefers-reduced-motion`: sin brillo ni pulso, solo cambia el texto.
 - **Error:** el panel cambia a icono + «No se pudo generar» en `--status-error` y el botón principal **Reintentar**.
