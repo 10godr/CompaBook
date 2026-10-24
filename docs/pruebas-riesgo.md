@@ -92,4 +92,67 @@ Usar `https://compabook.vercel.app` desde la **app instalada** (en Inicio, enlac
 
 ## 3. `pg_cron` → `pg_net` → Vercel
 
-_Pendiente (necesita el proyecto `compabook-prod` de Supabase)._
+**Qué se comprueba:** que `pg_cron` en Supabase (`compabook-prod`) llama cada minuto, con `pg_net`, a un endpoint de la función de Vercel protegido por un secreto, y que la llamada queda en los registros de las dos partes. Es el criterio «`pg_cron` llama a `/internal/jobs` en producción y queda en los logs» de [`diseno-tecnico.md`](diseno-tecnico.md) §11.
+
+**Código temporal:** `backend/app/poc_cron.py` (`POST /api/v1/internal/ping`). Compara la cabecera `X-Internal-Secret` con `INTERNAL_SECRET` en tiempo constante, no toca la base de datos y nunca registra ni devuelve el secreto. Responde 503 si `INTERNAL_SECRET` no está definida y 401 si falta o es incorrecta.
+
+**Configuración previa:**
+- Vercel (*Production*): `INTERNAL_SECRET` (cadena aleatoria larga) y `DATABASE_URL` / `DATABASE_URL_DIRECT` ya cargadas.
+- Supabase: extensiones `pg_cron` y `pg_net` activadas.
+
+### Procedimiento
+
+| # | Dónde | Pasos | Resultado esperado |
+|---|---|---|---|
+| C1 | Navegador o `curl` | `POST https://compabook.vercel.app/api/v1/internal/ping` **sin** cabecera | `401` (con `503` es que falta `INTERNAL_SECRET`) |
+| C2 | Supabase → SQL Editor | Guardar el secreto en Vault (SQL de abajo, pegando el valor real de `INTERNAL_SECRET`) | `create_secret` devuelve un id |
+| C3 | Supabase → SQL Editor | Programar la tarea con `cron.schedule` | Devuelve el número del trabajo |
+| C4 | Supabase → SQL Editor | Esperar 2–3 min y ejecutar las consultas de verificación | `cron.job_run_details`: `succeeded`; `net._http_response`: `status_code = 200` |
+| C5 | Vercel → proyecto → Logs | Buscar `internal_ping` | Una línea por minuto |
+| C6 | Supabase → SQL Editor | `cron.unschedule` | La tarea deja de ejecutarse |
+
+```sql
+-- C2. Guardar el secreto (sustituir por el valor real; no compartirlo ni subirlo al repositorio)
+select vault.create_secret('<VALOR DE INTERNAL_SECRET>', 'internal_secret');
+
+-- C3. Programar la llamada cada minuto
+select cron.schedule(
+  'compabook-ping',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url     := 'https://compabook.vercel.app/api/v1/internal/ping',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'X-Internal-Secret', (select decrypted_secret from vault.decrypted_secrets where name = 'internal_secret')
+    )
+  );
+  $$
+);
+
+-- C4. Verificar
+select status, return_message, start_time from cron.job_run_details order by start_time desc limit 5;
+select id, status_code, content, created from net._http_response order by created desc limit 5;
+
+-- C6. Parar
+select cron.unschedule('compabook-ping');
+```
+
+`net._http_response` guarda las respuestas durante unas horas. Si `status_code` es 401, el secreto de Vault no coincide con el de Vercel; si es 503, falta `INTERNAL_SECRET` en Vercel (¿redeploy?).
+
+### Resultados
+
+| # | Resultado | Fecha | Notas |
+|---|---|---|---|
+| C1 | | | |
+| C2 | | | |
+| C3 | | | |
+| C4 | | | |
+| C5 | | | |
+| C6 | | | |
+
+**Conclusión:** _pendiente_
+
+Notas para decidir al terminar:
+- Dejar la tarea unos días activa también ayuda a responder el pendiente «¿Supabase gratis pausa el proyecto por inactividad aunque `pg_cron` esté activo?». Son unas 1.440 llamadas al día; conviene mirar *Usage* en Vercel y en Supabase para confirmar que caben en el plan.
+- El secreto en Vault solo lo ve quien tenga acceso al panel de Supabase. Para rotarlo: nuevo valor en Vercel, `vault.update_secret` y redeploy.

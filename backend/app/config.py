@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     # Los servicios de push exigen un contacto: un mailto: o una URL https.
     vapid_subject: str = "https://compabook.vercel.app"
 
+    # Secreto con el que pg_cron llama a /internal/*.
+    internal_secret: str | None = None
+    log_level: str = "INFO"
+
 
 @lru_cache
 def get_settings() -> Settings:

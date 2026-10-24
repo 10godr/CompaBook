@@ -1,14 +1,21 @@
+import logging
+
 from fastapi import APIRouter, FastAPI, HTTPException
 from sqlalchemy import text
 
-from app import poc, poc_push
+from app import poc, poc_cron, poc_push
+from app.config import get_settings
 from app.db import get_engine
+
+# Vercel recoge la salida estándar; sin esto los mensajes INFO no se ven.
+logging.basicConfig(level=get_settings().log_level)
 
 app = FastAPI(title="CompaBook API")
 
 router = APIRouter(prefix="/api/v1")
 router.include_router(poc.router)
 router.include_router(poc_push.router)
+router.include_router(poc_cron.router)
 
 
 @router.get("/health")
