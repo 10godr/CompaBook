@@ -37,11 +37,11 @@ Usar siempre `https://compabook.vercel.app/prueba-cookie` (la preview de Vercel 
 | D | ✅ `present: true` tras crear la cookie en la app | 2026-10-22 | |
 | E | ✅ `present: true` tras cerrar y abrir la app | 2026-10-22 | |
 | F | ✅ La marca de `localStorage` sigue tras cerrar y abrir | 2026-10-22 | |
-| G | | | Pendiente: esperar 24 h |
-| H | | | |
-| I | | | |
+| G | ✅ | 2026-10-23 | Reportado por Emile («lo pendiente de la Fase 4 está listo»), sin el valor de `age_seconds`. La cookie se creó el 2026-10-22 por la noche |
+| H | Pendiente | | Hacerlo a partir del **2026-10-30** (8 días después de crear la cookie), sin abrir **Crear** ni **Borrar** antes |
+| I | Pendiente | | Después de H |
 
-**Conclusión provisional (2026-10-22):** la cookie de sesión con las opciones del diseño funciona en la PWA instalada y sobrevive a cerrar y abrir la app, con frontend y API en el mismo dominio. Safari y la app instalada **no comparten cookies** (C2), así que la guía de instalación (Fase 9) debe avisar de que hay que iniciar sesión dentro de la app. Siguen pendientes la renovación a las 24 h (G) y la persistencia tras 8 días (H); el reloj de ambas arranca al crear la cookie dentro de la app, sin volver a crearla ni borrarla. Mientras no se completen G y H, la decisión de sesiones en base de datos con cookie sigue en pie pero no está cerrada.
+**Conclusión provisional (2026-10-23):** la cookie de sesión con las opciones del diseño funciona en la PWA instalada y sobrevive a cerrar y abrir la app, con frontend y API en el mismo dominio. Safari y la app instalada **no comparten cookies** (C2), así que la guía de instalación (Fase 9) debe avisar de que hay que iniciar sesión dentro de la app. La renovación a las 24 h (G) se dio por buena el 2026-10-23. Sigue pendiente la persistencia tras 8 días (H), que no puede hacerse antes del **2026-10-30**; hasta entonces no se debe crear ni borrar la cookie. Mientras no se complete H, la decisión de sesiones en base de datos con cookie sigue en pie pero no está cerrada.
 
 ---
 
@@ -86,13 +86,13 @@ Usar `https://compabook.vercel.app` desde la **app instalada** (en Inicio, enlac
 | P4 | ✅ | 2026-10-22 | Idem |
 | P5 | ✅ | 2026-10-22 | Idem |
 | P6 | ✅ | 2026-10-22 | Idem |
-| P7 | Pendiente | | Repetir P4 pasadas varias horas y, mejor, al día siguiente |
+| P7 | ✅ | 2026-10-23 | Reportado por Emile, sin detalle de la hora del segundo envío |
 
-**Conclusión provisional (2026-10-22):** el push funciona de extremo a extremo con la PWA instalada: `pywebpush` con claves VAPID desde una función de Vercel, service worker propio y llegada con la app cerrada y con el teléfono bloqueado. Falta confirmar que la suscripción no caduca (P7). Para la Fase 7 hay que guardar las suscripciones por usuario y marcarlas inactivas si el servicio responde 404 o 410, como ya prevé `diseno-tecnico.md` §1.6.
+**Conclusión (2026-10-23):** el push funciona de extremo a extremo con la PWA instalada en iPhone y también en Android: `pywebpush` con claves VAPID desde una función de Vercel, service worker propio y llegada con la app cerrada y con el teléfono bloqueado. La suscripción siguió valiendo en un segundo envío (P7). Para la Fase 7 hay que guardar las suscripciones por usuario y marcarlas inactivas si el servicio responde 404 o 410, como ya prevé `diseno-tecnico.md` §1.6.
 
 ### Android
 
-**2026-10-23:** el equipo probó el mismo código (`/prueba-push`) en un Android y las notificaciones funcionaron. Reportado de palabra: no se anotó el modelo, la versión de Android ni el navegador, ni si fue con la PWA instalada o desde una pestaña, ni los pasos concretos (P1 a P6). Antes de cerrar la Fase 7 hay que repetirlo con la tabla anterior y anotar esos datos.
+**2026-10-23:** el equipo probó el mismo código (`/prueba-push`) en un **Honor X5c** y las notificaciones funcionaron, tanto en **Brave** (pestaña del navegador) como con la **app instalada**. Reportado de palabra: no se anotó la versión de Android ni el detalle de los pasos P1 a P6. Se repetirá con la tabla anterior en la Fase 7, con el flujo real de recordatorios.
 
 ## 3. `pg_cron` → `pg_net` → Vercel
 
@@ -153,7 +153,7 @@ select cron.unschedule('compabook-ping');
 | C3 | ✅ `schedule = 1` | 2026-10-23 | Tras activar `pg_cron` y `pg_net` |
 | C4 | ✅ `status_code = 200` | 2026-10-23 | Reportado por Emile. Las filas 11 y 12 quedaron con 401: son de antes de corregir el secreto y `net._http_response` no se reescribe |
 | C5 | ✅ | 2026-10-23 | Reportado por Emile como «todo bien»; sin detalle de las líneas |
-| C6 | Pendiente | | Decidir si se para la tarea o se deja unos días (ver notas) |
+| C6 | Se deja corriendo | 2026-10-23 | La tarea `compabook-ping` sigue activa a propósito. **Revisar el 2026-10-30**: si Supabase pausó el proyecto, el uso en *Usage* de Vercel y Supabase, y después pararla con `cron.unschedule` |
 
 ### Hallazgos
 
@@ -163,7 +163,7 @@ select cron.unschedule('compabook-ping');
 - Ejecutar varias sentencias juntas en el SQL Editor de Supabase solo muestra el resultado de la última.
 - Al definitivo (`/internal/jobs`, `/reminders`, `/cleanup`) le valen el mismo esquema de secreto en cabecera y la misma tarea de `pg_cron`.
 
-**Conclusión (2026-10-23):** `pg_cron` llama cada minuto a la función de Vercel con `pg_net`, con el secreto guardado en Vault, y la llamada queda en `net._http_response` y en los registros de Vercel. La arquitectura del reloj es viable en el plan gratuito. Falta decidir qué hacer con la tarea (C6).
+**Conclusión (2026-10-23):** `pg_cron` llama cada minuto a la función de Vercel con `pg_net`, con el secreto guardado en Vault, y la llamada queda en `net._http_response` y en los registros de Vercel. La arquitectura del reloj es viable en el plan gratuito. La tarea se deja corriendo hasta el 2026-10-30 para ver si Supabase pausa el proyecto (C6).
 
 Notas para decidir al terminar:
 - Dejar la tarea unos días activa también ayuda a responder el pendiente «¿Supabase gratis pausa el proyecto por inactividad aunque `pg_cron` esté activo?». Son unas 1.440 llamadas al día; conviene mirar *Usage* en Vercel y en Supabase para confirmar que caben en el plan.
