@@ -20,10 +20,93 @@
       "system": "System",
       "dark": "Dark",
       "light": "Light"
-    }
+    },
+    "session": "Session",
+    "signedInAs": "Signed in as {{email}}",
+    "logout": "Sign out"
   },
   "languages": {
     "es": "Español",
     "en": "English"
+  },
+  "welcome": {
+    "titleLine1": "Understand any concept",
+    "titleLine2": "in a couple of minutes.",
+    "register": "Create account",
+    "login": "Sign in"
+  },
+  "auth": {
+    "email": "Email",
+    "password": "Password",
+    "newPassword": "New password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "language": "Language",
+    "languageNote": "You can write your concepts in any language; we'll explain them in the language you choose.",
+    "terms": "I accept the terms and the privacy policy",
+    "interfaceLanguage": "Website language",
+    "back": "Back",
+    "login": {
+      "title": "Sign in",
+      "submit": "Sign in",
+      "forgot": "Forgot your password?",
+      "noAccount": "Don't have an account?",
+      "register": "Create account",
+      "passwordReset": "Password changed. You can now sign in with the new one."
+    },
+    "register": {
+      "title": "Create account",
+      "intro": "Sign-up is invitation only: use the email you were invited with.",
+      "submit": "Create account",
+      "haveAccount": "Already have an account?",
+      "login": "Sign in"
+    },
+    "verify": {
+      "title": "Check your email",
+      "intro": "We sent a 6-digit code to {{email}}. It expires in 15 minutes.",
+      "introNoEmail": "Enter your email and the 6-digit code we sent you.",
+      "code": "Verification code",
+      "digit": "Digit {{n}} of 6",
+      "submit": "Verify",
+      "resend": "Resend code",
+      "resendIn": "Resend in {{seconds}} s",
+      "resent": "If the email is valid, we sent you a new code.",
+      "spam": "If you can't find it, check your spam folder."
+    },
+    "forgot": {
+      "title": "Reset your password",
+      "intro": "Enter your email and we'll send you a code to choose a new password.",
+      "submit": "Send code",
+      "sent": "If the email is valid, we sent you a code. Check your spam folder too.",
+      "haveCode": "I already have the code"
+    },
+    "reset": {
+      "title": "Choose a new password",
+      "intro": "Enter the code we sent you and your new password.",
+      "submit": "Change password"
+    },
+    "errors": {
+      "invalid_credentials": "The email or password is incorrect.",
+      "email_not_verified": "Your email isn't verified yet.",
+      "verifyNow": "Verify my email",
+      "registration_not_allowed": "Sign-up is invitation only.",
+      "invalid_code": "The code is incorrect or has expired. Request a new one if needed.",
+      "rate_limited": "Too many attempts. Try again in {{minutes}} min.",
+      "rate_limited_short": "Too many attempts. Try again in a moment.",
+      "weak_password": {
+        "too_short": "The password must be at least 8 characters long.",
+        "too_long": "The password can't be longer than 128 characters.",
+        "too_common": "That password is too common. Choose another one."
+      },
+      "validation_error": "Check the data and try again.",
+      "network": "Can't reach the server. Try again.",
+      "unknown": "Something went wrong. Try again.",
+      "email_unavailable": "Email delivery isn't available right now.",
+      "emailInvalid": "Enter a valid email.",
+      "passwordShort": "The password must be at least 8 characters long.",
+      "passwordRequired": "Enter your password.",
+      "termsRequired": "You need to accept the terms to create the account.",
+      "codeIncomplete": "Enter all 6 digits of the code."
+    }
   }
 }

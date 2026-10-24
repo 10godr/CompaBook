@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
+import { useAuth } from '../auth/context'
 import { type Language, setLanguage } from '../i18n'
 import { getThemePreference, setThemePreference, type ThemePreference } from '../theme'
 
@@ -9,6 +10,7 @@ const THEMES: ThemePreference[] = ['system', 'dark', 'light']
 
 export default function Settings() {
   const { t, i18n } = useTranslation()
+  const { user, logout } = useAuth()
   const [theme, setTheme] = useState(getThemePreference)
 
   return (
@@ -31,6 +33,14 @@ export default function Settings() {
             </option>
           ))}
         </select>
+      </div>
+
+      <div className="card">
+        <h2>{t('settings.session')}</h2>
+        <p className="muted">{t('settings.signedInAs', { email: user?.email })}</p>
+        <button type="button" className="btn btn-outline" onClick={() => void logout()}>
+          {t('settings.logout')}
+        </button>
       </div>
 
       <div className="card">

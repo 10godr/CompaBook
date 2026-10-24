@@ -11,7 +11,8 @@ export default function Home() {
         <br />
         <span className="headline-muted">{t('home.titleLine2')}</span>
       </h1>
-      {/* Temporal (Fase 4): la PWA instalada no tiene barra de direcciones. */}
+      {/* Temporal (Fase 4): la app instalada no tiene barra de direcciones. Se quitan al cerrar
+          la fase, junto con los de la bienvenida. */}
       <Link to="/prueba-cookie" className="poc-link">
         Prueba de cookie
       </Link>

@@ -275,7 +275,7 @@ h2 {
 }
 
 /* Botones: solo los de la página temporal de prueba; los definitivos llegan con las pantallas. */
-.card button {
+.card button:not(.btn) {
   min-height: var(--touch-min);
   padding: 0 var(--space-4);
   background: var(--accent);
@@ -324,4 +324,261 @@ h2 {
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   font: inherit;
+}
+
+.select-small {
+  min-height: var(--touch-min);
+}
+
+.muted {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.loading {
+  min-height: 100dvh;
+  background: var(--bg-canvas);
+}
+
+/* Pantallas sin sesión: marca y selector de idioma arriba, contenido centrado. */
+.auth-page {
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.auth-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-3);
+}
+
+.brand {
+  color: var(--text-strong);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.auth-main {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) calc(var(--space-12) + env(safe-area-inset-bottom));
+}
+
+.auth-form,
+.welcome {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.welcome {
+  gap: var(--space-8);
+  padding-top: var(--space-8);
+}
+
+.display {
+  font-size: var(--text-display);
+  line-height: 1.15;
+  letter-spacing: -0.045em;
+}
+
+.stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.stack-small {
+  gap: 0;
+  align-items: flex-start;
+}
+
+/* Campos (design.md §7): fondo elevado, borde de control, 48px de alto y 16px de texto. */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 var(--space-3);
+  background: var(--bg-raised);
+  color: var(--text-strong);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: var(--text-body);
+}
+
+.input[aria-invalid='true'],
+.code-box[aria-invalid='true'] {
+  border-color: var(--status-error);
+}
+
+.input-wrap {
+  position: relative;
+}
+
+.input-wrap .input {
+  padding-right: calc(var(--touch-min) + var(--space-2));
+}
+
+.input-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: var(--touch-min);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--icon);
+  border: 0;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.input-toggle svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.75;
+}
+
+.field-error {
+  margin: 0;
+  color: var(--status-error);
+  font-size: var(--text-small);
+}
+
+.check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  min-height: var(--touch-min);
+  color: var(--text-reading);
+}
+
+.check input {
+  width: 20px;
+  height: 20px;
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+/* Código de 6 dígitos: seis casillas de 48 × 56 px. */
+.code-input {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: space-between;
+}
+
+.code-box {
+  width: 100%;
+  max-width: 48px;
+  height: 56px;
+  padding: 0;
+  background: var(--bg-raised);
+  color: var(--text-strong);
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-size: var(--text-heading-sm);
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Botones (design.md §7): 44 px de alto mínimo, 16 px de texto y peso 500. */
+.btn {
+  min-height: var(--touch-min);
+  padding: 0 var(--space-4);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  border-radius: var(--radius-control);
+  font: inherit;
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease-out,
+    opacity 150ms ease-out;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #ffffff;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.btn-secondary {
+  background: var(--bg-raised);
+  color: var(--text-strong);
+}
+
+.btn-outline {
+  background: transparent;
+  color: var(--text-strong);
+  border-color: var(--border-control);
+}
+
+.link {
+  color: var(--accent-text);
+}
+
+/* Mensajes en línea: fondo del color de estado al 12 % y borde izquierdo de 3 px. */
+.alert {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-left: 3px solid;
+  border-radius: var(--radius-control);
+  color: var(--text-strong);
+  font-size: var(--text-small);
+  line-height: 1.45;
+}
+
+.alert-error {
+  border-color: var(--status-error);
+  background: color-mix(in srgb, var(--status-error) 12%, transparent);
+}
+
+.alert-success {
+  border-color: var(--status-success);
+  background: color-mix(in srgb, var(--status-success) 12%, transparent);
 }
