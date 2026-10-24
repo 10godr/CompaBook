@@ -90,6 +90,10 @@ Usar `https://compabook.vercel.app` desde la **app instalada** (en Inicio, enlac
 
 **Conclusión provisional (2026-10-22):** el push funciona de extremo a extremo con la PWA instalada: `pywebpush` con claves VAPID desde una función de Vercel, service worker propio y llegada con la app cerrada y con el teléfono bloqueado. Falta confirmar que la suscripción no caduca (P7). Para la Fase 7 hay que guardar las suscripciones por usuario y marcarlas inactivas si el servicio responde 404 o 410, como ya prevé `diseno-tecnico.md` §1.6.
 
+### Android
+
+**2026-10-23:** el equipo probó el mismo código (`/prueba-push`) en un Android y las notificaciones funcionaron. Reportado de palabra: no se anotó el modelo, la versión de Android ni el navegador, ni si fue con la PWA instalada o desde una pestaña, ni los pasos concretos (P1 a P6). Antes de cerrar la Fase 7 hay que repetirlo con la tabla anterior y anotar esos datos.
+
 ## 3. `pg_cron` → `pg_net` → Vercel
 
 **Qué se comprueba:** que `pg_cron` en Supabase (`compabook-prod`) llama cada minuto, con `pg_net`, a un endpoint de la función de Vercel protegido por un secreto, y que la llamada queda en los registros de las dos partes. Es el criterio «`pg_cron` llama a `/internal/jobs` en producción y queda en los logs» de [`diseno-tecnico.md`](diseno-tecnico.md) §11.

@@ -51,8 +51,9 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 | Tema | Decisión |
 |---|---|
 | Usuarios | **Multiusuario** con cuentas propias; cada usuario solo ve sus datos |
-| Plataforma | **PWA** instalable en iPhone y usable en computadora |
+| Plataforma | **PWA** instalable en iPhone y en Android, y usable en computadora. Sin app nativa |
 | Login | **Propio** (sin Supabase Auth): email + contraseña, verificación por código, recuperación de contraseña. Solo email por ahora |
+| Registro | **Solo por invitación**: únicamente pueden crear cuenta los correos de una lista de permitidos (tabla `allowed_emails`). Cerrar el registro es no añadir correos. **Sin panel de administración**: la lista y la suspensión de cuentas (`users.disabled_at`) se gestionan con SQL en Supabase |
 | Sesión | **Cookie segura `httpOnly`** con token de sesión guardado (hasheado) en la base de datos; 30 días que se renuevan con el uso. Sin cookies de analítica ni publicidad |
 | Base de datos | **PostgreSQL alojado en Supabase**, accedido con **SQLAlchemy** y migraciones con **Alembic** |
 | Uso de Supabase | Solo como **base de datos** y **`pg_cron`** (reloj). No se usa su Auth ni su API automática |
@@ -64,9 +65,10 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 | Correos | **Gmail del proyecto** por SMTP con contraseña de aplicación, detrás de `EmailProvider` (migrable a Resend cuando haya dominio) |
 | IA | **Gemini API, nivel gratuito**, detrás de `AIProvider` |
 | Videos | **YouTube Data API**, 2 videos en el idioma del usuario, **reutilizando** resultados ya buscados con una clave estable que da la IA |
+| Fichas | **Compartidas entre usuarios** por clave estable (`cache_slug`) e idioma. Antes de llamar a Gemini se busca el título normalizado en una tabla de alias (`concept_aliases`); si ya existe la ficha, no se gasta cuota. La ficha compartida no guarda datos de ningún usuario |
 | Idiomas | Español e inglés, para la interfaz y para el contenido |
-| Recordatorios | Notificaciones **Web Push**: una hora al día y días de la semana elegidos por el usuario |
-| Voz | **Atajo de Siri** con token personal por usuario |
+| Recordatorios | Notificaciones **Web Push**: una hora al día y días de la semana elegidos por el usuario. Probado en iPhone (PWA instalada) y en Android |
+| Voz | **Atajo de Siri** con token personal por usuario. En Android no hay integración con «Hey Google» (ver «Fuera del MVP») |
 | Límites de uso | **Límite suave por usuario** para proteger las cuotas compartidas: 30 conceptos y 10 reintentos al día; título de máximo 200 caracteres. Configurables por variable de entorno |
 | Calidad | **GitHub Actions** en cada PR: `ruff` + `pytest` (backend) y lint + typecheck + build (frontend) |
 | Diseño visual | Oscuro por defecto con tema claro según el sistema; definido en [`design.md`](design.md) |
@@ -91,6 +93,9 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 - **Claude Code como motor de IA en producción:** la IA necesita su propia API; la suscripción de Claude no la incluye.
 - **Ollama / modelo local:** requiere una computadora encendida.
 - **Cron de Vercel Hobby y GitHub Actions como reloj:** frecuencia o cuota insuficientes.
+- **Registro abierto a cualquiera:** las cuotas de Gemini y YouTube son compartidas y el repositorio es público; una URL difundida podría agotarlas. Se registra solo quien esté en la lista de correos permitidos.
+- **Panel de administración:** es una superficie de seguridad nueva; con pocos usuarios bastan unas consultas SQL documentadas.
+- **Integración con «Hey Google»:** Google está sustituyendo Assistant por Gemini en Android y no se encontró una vía documentada para una PWA; las integraciones de voz de Google suelen exigir app nativa, que está descartada.
 
 ---
 
@@ -100,22 +105,24 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 
 | Área | Funcionalidad |
 |---|---|
-| Cuenta | Registro con verificación por código, login, logout, recuperar contraseña, cambiar idioma, eliminar cuenta y datos |
+| Cuenta | Registro solo para correos permitidos con verificación por código, login, logout, recuperar contraseña, cambiar idioma, eliminar cuenta y datos; suspensión de cuentas por el administrador |
 | Idioma | Interfaz detectada del dispositivo + elección es/en |
 | Captura | Crear conceptos por texto y por atajo de Siri |
-| IA | Ficha breve generada al momento; panel de carga; botón **Reintentar** si falla |
+| IA | Ficha breve generada al momento (o reutilizada si ya existe); panel de carga; botón **Reintentar** si falla |
 | Videos | 2 videos con miniatura y título, uno al lado del otro; al hacer clic abren YouTube |
 | Cuaderno | Listado, búsqueda y eliminación de conceptos |
 | Recordatorios | Hora diaria + días de la semana; notificación push |
 | Límites | Límite diario suave por usuario con mensaje claro al alcanzarlo |
-| Instalación | PWA instalable en iPhone y usable en computadora |
+| Instalación | PWA instalable en iPhone y en Android, y usable en computadora |
 | Legal | Privacidad, cookies y términos, en es/en |
 
 ### Fuera del MVP
 
 - Login con Google u otros proveedores.
 - Planes o límites distintos por usuario.
-- Reutilizar fichas entre usuarios (hoy solo se reutilizan los videos).
+- Integración de voz con «Hey Google» o Gemini en Android. Alternativas a revisar después de Siri: el mismo endpoint con token desde una app de atajos de Android, o el *Web Share Target* de la PWA.
+- Panel de administración y registro abierto.
+- Corregir o regenerar una ficha compartida desde la app (por ahora, por SQL).
 - Dominio propio y correos con Resend.
 - Repaso espaciado, cuestionarios, sesiones de estudio.
 - App nativa de iOS.
@@ -175,14 +182,15 @@ Aplicación web **multiusuario** para entender conceptos rápido. No es un curso
 3. Junto al selector, una nota breve:
    - es: «Puedes escribir tus conceptos en cualquier idioma; te los explicaremos en el idioma que elijas.»
    - en: «You can write your concepts in any language; we'll explain them in the language you choose.»
-4. Se envía un **código de 6 dígitos** al correo; la cuenta queda activa al introducirlo. La pantalla recuerda **revisar la carpeta de spam**.
-5. El idioma se puede cambiar en Ajustes. Las fichas ya generadas se quedan en su idioma original.
+4. Si el correo **no está en la lista de permitidos**, el registro se rechaza con un mensaje claro: «El registro es solo por invitación». Los correos se añaden con SQL en Supabase.
+5. Se envía un **código de 6 dígitos** al correo; la cuenta queda activa al introducirlo. La pantalla recuerda **revisar la carpeta de spam**.
+6. El idioma se puede cambiar en Ajustes. Las fichas ya generadas se quedan en su idioma original.
 
 ### 5.2 Captura y ficha
 
 1. Guardar el concepto (**siempre primero**) y crear su trabajo en la cola.
 2. El frontend llama de inmediato a `POST /concepts/{id}/process`, que genera la ficha en esa misma petición.
-3. Gemini devuelve una **respuesta estructurada** en el idioma del usuario; se valida y se guarda.
+3. **Buscar una ficha ya generada antes de llamar a la IA:** el título se normaliza y se busca en la tabla de alias (texto normalizado + idioma → clave de la ficha). Si existe, se reutiliza la ficha compartida y **no se llama a Gemini**. Si no, Gemini devuelve una **respuesta estructurada** en el idioma del usuario; se valida, se guarda como ficha compartida y se registra el alias para la próxima vez.
 4. Obtener 2 videos: **reutilizar** si ya se buscó ese concepto en ese idioma; si no, buscar en YouTube y guardar en caché.
 5. Si algo falla, el reloj lo reintenta automáticamente; al agotar intentos, se muestra **Reintentar**.
 6. Si la ficha se guardó pero fallaron los videos, el concepto se completa sin videos; reintentar nunca vuelve a llamar a Gemini si la ficha ya existe.
@@ -208,6 +216,7 @@ Estados: `pending` → `processing` → `completed` | `failed`.
 - Cada usuario genera un **token personal revocable** en Ajustes (se guarda solo su hash).
 - El atajo dicta el texto y hace `POST` al backend con ese token.
 - Se entrega una guía paso a paso para crear el atajo, con el aviso de **no compartir el atajo**: lleva el token dentro.
+- El endpoint es un `POST` con token, así que sirve desde cualquier cliente HTTP. Su uso desde Android (apps de atajos) **no está probado**; se decide después de Siri.
 
 ### 5.5 Límite diario
 
@@ -221,12 +230,14 @@ Estados: `pending` → `processing` → `completed` | `failed`.
 
 | Tabla | Contenido |
 |---|---|
-| `users` | Email, hash de contraseña, idioma, zona horaria, email verificado, fechas |
+| `users` | Email, hash de contraseña, idioma, zona horaria, email verificado, suspensión (`disabled_at`), fechas |
+| `allowed_emails` | Correos que pueden registrarse (invitación); se gestiona con SQL |
 | `sessions` | Sesiones abiertas (hash del token, caducidad, último uso) |
 | `email_codes` | Códigos de verificación y recuperación (hash, propósito, caducidad, intentos) |
 | `rate_limit_events` | Registro de intentos para límites (login, envío de códigos, conceptos y reintentos diarios) |
-| `concepts` | Título (lo que escribió el usuario), idioma de la ficha, origen (app/siri), propietario |
-| `concept_cards` | Ficha generada: qué es, para qué sirve, ejemplo, clave de caché |
+| `concepts` | Título (lo que escribió el usuario), idioma de la ficha, origen (app/siri), propietario, ficha asignada |
+| `concept_cards` | Ficha generada, **compartida** entre usuarios: qué es, para qué sirve, ejemplo, clave de caché e idioma |
+| `concept_aliases` | Texto normalizado + idioma → clave de la ficha, para no llamar a Gemini si ya se vio ese concepto. Sin usuario asociado |
 | `video_cache` | Videos por clave de concepto + idioma, compartidos para reutilizar |
 | `processing_jobs` | Cola de trabajos (uno por concepto): estado, etapa, intentos, errores |
 | `reminder_settings` | Activo, hora, días, último envío (la zona horaria está en `users`) |
@@ -292,7 +303,9 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 9. Límite diario por usuario y título de máximo 200 caracteres (cuotas compartidas y coste del prompt).
 10. El contenido generado por la IA se muestra como texto, nunca como HTML.
 11. **Privacidad:** el nivel gratuito de Gemini puede usar el contenido para mejorar productos de Google; se informa en la política de privacidad.
-12. El usuario puede **eliminar su cuenta y todos sus datos**.
+12. El usuario puede **eliminar su cuenta y todos sus datos**. Las fichas compartidas y los alias no llevan datos del usuario y se conservan.
+13. **Fichas compartidas:** un error o un contenido manipulado en una ficha lo verían todos los que pidan ese concepto. Se acepta el riesgo porque el registro es por invitación; el contenido se muestra siempre como texto y una ficha mala se corrige borrándola por SQL. Un alias solo se guarda si el texto normalizado tiene 60 caracteres o menos, para no conservar frases largas escritas por los usuarios.
+14. **Registro por invitación y suspensión:** `POST /auth/register` solo acepta correos de `allowed_emails`. Suspender una cuenta (`disabled_at`) corta sus sesiones y tokens al instante, porque se comprueba en cada petición.
 
 ---
 
@@ -304,10 +317,10 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 | 2. Diseño técnico | Datos, API, flujos, criterios | ✅ (revisado) |
 | 3. Aprobación | Revisión del equipo | ✅ (PR #1, 2026-10-22) |
 | 4. Fundamentos y prueba de riesgos | Estructura, CI, Docker local, FastAPI, SQLAlchemy + Alembic, frontend base con i18n y tema, despliegue en Vercel. **Prueba de concepto** de lo que puede tumbar la arquitectura: FastAPI bajo `/api` en Vercel, cookie en Safari con la PWA instalada, push al iPhone y `pg_cron` → `pg_net` → Vercel | |
-| 5. Cuentas | Registro, verificación por código, login, recuperación, idioma, eliminar cuenta, límites de intentos | |
+| 5. Cuentas | Registro solo por correos permitidos, verificación por código, login, recuperación, idioma, eliminar cuenta, suspensión de cuentas, límites de intentos | |
 | 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento, búsqueda y eliminación, límite diario | |
-| 6b. Cola y videos | Cola de respaldo, videos con caché, panel de carga, reintentar | |
-| 7. Recordatorios | Ajustes de hora y días, push, envío desde el reloj | |
+| 6b. Cola, videos y fichas compartidas | Cola de respaldo, videos con caché, alias y reutilización de fichas, panel de carga, reintentar | |
+| 7. Recordatorios | Ajustes de hora y días, push, envío desde el reloj. Pruebas en iPhone y en Android | |
 | 8. Siri | Tokens personales, endpoint y guía del atajo | |
 | 9. Legal y publicación | Textos legales es/en, pruebas en Windows e iPhone, despliegue | |
 
