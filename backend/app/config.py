@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     # Los servicios de push exigen un contacto: un mailto: o una URL https.
     vapid_subject: str = "https://compabook.vercel.app"
 
+    # Clave del servidor para firmar (HMAC) los códigos por correo. Larga y aleatoria.
+    secret_key: str | None = None
     # Secreto con el que pg_cron llama a /internal/*.
     internal_secret: str | None = None
     log_level: str = "INFO"
