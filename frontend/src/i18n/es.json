@@ -20,10 +20,93 @@
       "system": "Sistema",
       "dark": "Oscuro",
       "light": "Claro"
-    }
+    },
+    "session": "Sesión",
+    "signedInAs": "Has entrado como {{email}}",
+    "logout": "Cerrar sesión"
   },
   "languages": {
     "es": "Español",
     "en": "English"
+  },
+  "welcome": {
+    "titleLine1": "Entiende cualquier concepto",
+    "titleLine2": "en un par de minutos.",
+    "register": "Crear cuenta",
+    "login": "Entrar"
+  },
+  "auth": {
+    "email": "Correo electrónico",
+    "password": "Contraseña",
+    "newPassword": "Contraseña nueva",
+    "showPassword": "Mostrar contraseña",
+    "hidePassword": "Ocultar contraseña",
+    "language": "Idioma",
+    "languageNote": "Puedes escribir tus conceptos en cualquier idioma; te los explicaremos en el idioma que elijas.",
+    "terms": "Acepto los términos y la política de privacidad",
+    "interfaceLanguage": "Idioma de la web",
+    "back": "Volver",
+    "login": {
+      "title": "Entrar",
+      "submit": "Entrar",
+      "forgot": "¿Olvidaste tu contraseña?",
+      "noAccount": "¿No tienes cuenta?",
+      "register": "Crear cuenta",
+      "passwordReset": "Contraseña cambiada. Ya puedes entrar con la nueva."
+    },
+    "register": {
+      "title": "Crear cuenta",
+      "intro": "El registro es solo por invitación: usa el correo al que te invitaron.",
+      "submit": "Crear cuenta",
+      "haveAccount": "¿Ya tienes cuenta?",
+      "login": "Entrar"
+    },
+    "verify": {
+      "title": "Revisa tu correo",
+      "intro": "Enviamos un código de 6 dígitos a {{email}}. Caduca en 15 minutos.",
+      "introNoEmail": "Escribe tu correo y el código de 6 dígitos que te enviamos.",
+      "code": "Código de verificación",
+      "digit": "Dígito {{n}} de 6",
+      "submit": "Verificar",
+      "resend": "Reenviar código",
+      "resendIn": "Reenviar en {{seconds}} s",
+      "resent": "Si el correo es válido, te enviamos un código nuevo.",
+      "spam": "Si no lo ves, revisa la carpeta de spam."
+    },
+    "forgot": {
+      "title": "Recuperar contraseña",
+      "intro": "Escribe tu correo y te enviaremos un código para elegir una contraseña nueva.",
+      "submit": "Enviar código",
+      "sent": "Si el correo es válido, te enviamos un código. Revisa también la carpeta de spam.",
+      "haveCode": "Ya tengo el código"
+    },
+    "reset": {
+      "title": "Elige una contraseña nueva",
+      "intro": "Escribe el código que te enviamos y tu contraseña nueva.",
+      "submit": "Cambiar contraseña"
+    },
+    "errors": {
+      "invalid_credentials": "El correo o la contraseña no son correctos.",
+      "email_not_verified": "Falta verificar tu correo.",
+      "verifyNow": "Verificar mi correo",
+      "registration_not_allowed": "El registro es solo por invitación.",
+      "invalid_code": "El código no es correcto o ya caducó. Pide uno nuevo si hace falta.",
+      "rate_limited": "Demasiados intentos. Inténtalo de nuevo en {{minutes}} min.",
+      "rate_limited_short": "Demasiados intentos. Inténtalo de nuevo en un momento.",
+      "weak_password": {
+        "too_short": "La contraseña debe tener al menos 8 caracteres.",
+        "too_long": "La contraseña no puede pasar de 128 caracteres.",
+        "too_common": "Esa contraseña es demasiado común. Elige otra."
+      },
+      "validation_error": "Revisa los datos e inténtalo de nuevo.",
+      "network": "No hay conexión con el servidor. Inténtalo de nuevo.",
+      "unknown": "Algo salió mal. Inténtalo de nuevo.",
+      "email_unavailable": "El envío de correos no está disponible ahora mismo.",
+      "emailInvalid": "Escribe un correo válido.",
+      "passwordShort": "La contraseña debe tener al menos 8 caracteres.",
+      "passwordRequired": "Escribe tu contraseña.",
+      "termsRequired": "Tienes que aceptar los términos para crear la cuenta.",
+      "codeIncomplete": "Escribe los 6 dígitos del código."
+    }
   }
 }
