@@ -316,8 +316,8 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 | 1. Análisis | Revisión de contexto, diseño y entorno | ✅ |
 | 2. Diseño técnico | Datos, API, flujos, criterios | ✅ (revisado) |
 | 3. Aprobación | Revisión del equipo | ✅ (PR #1, 2026-10-22) |
-| 4. Fundamentos y prueba de riesgos | Estructura, CI, Docker local, FastAPI, SQLAlchemy + Alembic, frontend base con i18n y tema, despliegue en Vercel. **Prueba de concepto** de lo que puede tumbar la arquitectura: FastAPI bajo `/api` en Vercel, cookie en Safari con la PWA instalada, push al iPhone y `pg_cron` → `pg_net` → Vercel | |
-| 5. Cuentas | Registro solo por correos permitidos, verificación por código, login, recuperación, idioma, eliminar cuenta, suspensión de cuentas, límites de intentos | |
+| 4. Fundamentos y prueba de riesgos | Estructura, CI, Docker local, FastAPI, SQLAlchemy + Alembic, frontend base con i18n y tema, despliegue en Vercel. **Prueba de concepto** de lo que puede tumbar la arquitectura: FastAPI bajo `/api` en Vercel, cookie en Safari con la PWA instalada, push al iPhone y `pg_cron` → `pg_net` → Vercel | 🟡 Hecha; falta el cierre a partir del 2026-10-30 (prueba H de la cookie, parar `pg_cron` de prueba, retirar el código temporal) |
+| 5. Cuentas | Registro solo por correos permitidos, verificación por código, login, recuperación, idioma, eliminar cuenta, suspensión de cuentas, límites de intentos | ✅ (PR #18 a #23, 2026-10-23). Ver `docs/cierre-fase-5.md` |
 | 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento, búsqueda y eliminación, límite diario | |
 | 6b. Cola, videos y fichas compartidas | Cola de respaldo, videos con caché, alias y reutilización de fichas, panel de carga, reintentar | |
 | 7. Recordatorios | Ajustes de hora y días, push, envío desde el reloj. Pruebas en iPhone y en Android | |
@@ -329,7 +329,7 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 ## 12. Pendientes
 
 - [x] Nombre del producto: **CompaBook**.
-- [ ] Crear el Gmail del proyecto (envíos y contacto legal) y su contraseña de aplicación.
+- [x] Crear el Gmail del proyecto (envíos y contacto legal) y su contraseña de aplicación. Verificado en producción el 2026-10-23.
 - [ ] Crear los proyectos Supabase `compabook-dev` y `compabook-prod`.
 - [ ] Anotar los límites reales de Gemini al crear la clave en AI Studio y ajustar el límite diario por usuario.
 - [ ] Verificar si Supabase gratis **pausa** el proyecto por inactividad aunque `pg_cron` esté activo.
