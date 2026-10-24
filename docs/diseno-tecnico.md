@@ -77,12 +77,12 @@ Funcionamiento:
 ### 2.2 Contraseñas
 
 - **argon2id** con `pwdlib`.
-- Mínimo 8 caracteres y máximo 128; se rechazan contraseñas muy comunes.
+- Mínimo 8 caracteres y máximo 128; se rechazan contraseñas muy comunes (una lista corta en `app/common_passwords.py`, pensada para un grupo cerrado) y las de menos de 4 caracteres distintos («aaaaaaaa»). Hashear o verificar con argon2id tarda unos 75 ms.
 - El login responde igual si el email no existe, la contraseña es incorrecta o la cuenta está suspendida (no revela qué cuentas existen).
 
 ### 2.3 Códigos por email
 
-- 6 dígitos, generados con `secrets`, guardados **hasheados**.
+- 6 dígitos, generados con `secrets`, guardados **hasheados con HMAC-SHA256** usando `SECRET_KEY` (clave del servidor) y ligados al usuario y al propósito. Un hash simple no basta: con solo un millón de combinaciones se descubriría en segundos si se filtrara la base de datos.
 - Caducan a los **15 minutos**; máximo **5 intentos** por código.
 - Un código nuevo invalida el anterior del mismo propósito.
 - Máximo **5 envíos por hora** por email.
@@ -535,6 +535,7 @@ DATABASE_URL=postgresql+psycopg://compabook:compabook@localhost:5433/compabook  
 DATABASE_URL_DIRECT=postgresql+psycopg://compabook:compabook@localhost:5433/compabook   # Alembic (en Supabase: 5432)
 APP_URL=http://localhost:5173
 COOKIE_SECURE=false
+SECRET_KEY=                         # clave del servidor para los códigos por correo (HMAC); larga y aleatoria
 SESSION_DAYS=30
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.8-flash

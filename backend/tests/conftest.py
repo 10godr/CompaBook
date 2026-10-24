@@ -2,6 +2,7 @@ from collections.abc import Iterator
 
 import pytest
 from sqlalchemy import Connection
+from sqlalchemy.orm import Session as DbSession
 
 from app.config import get_settings
 from app.db import get_engine
@@ -19,3 +20,10 @@ def db() -> Iterator[Connection]:
             yield connection
         finally:
             transaction.rollback()
+
+
+@pytest.fixture
+def orm(db: Connection) -> Iterator[DbSession]:
+    """Sesión del ORM sobre la misma conexión, para probar repositorios."""
+    with DbSession(bind=db, join_transaction_mode="create_savepoint") as session:
+        yield session

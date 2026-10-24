@@ -5,3 +5,4 @@ psycopg[binary]==3.3.6
 alembic==1.20.1
 pydantic-settings==2.16.1
 pywebpush==2.5.0
+pwdlib[argon2]==0.3.1

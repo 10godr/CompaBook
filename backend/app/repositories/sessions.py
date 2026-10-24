@@ -1,0 +1,51 @@
+import uuid
+from datetime import datetime
+
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session as DbSession
+
+from app.models import Session
+
+
+class SessionRepository:
+    """Sesiones de UN usuario.
+
+    Recibe siempre el `user_id` de la sesión autenticada y lo aplica en cada consulta; nunca
+    se acepta un `user_id` del cliente. Un recurso ajeno se comporta como si no existiera.
+    """
+
+    def __init__(self, db: DbSession, user_id: uuid.UUID) -> None:
+        self.db = db
+        self.user_id = user_id
+
+    def create(
+        self, token_hash: str, expires_at: datetime, user_agent: str | None = None
+    ) -> Session:
+        session = Session(
+            user_id=self.user_id,
+            token_hash=token_hash,
+            expires_at=expires_at,
+            user_agent=user_agent,
+        )
+        self.db.add(session)
+        self.db.flush()
+        return session
+
+    def list_active(self, now: datetime) -> list[Session]:
+        query = (
+            select(Session)
+            .where(Session.user_id == self.user_id, Session.expires_at > now)
+            .order_by(Session.created_at.desc())
+        )
+        return list(self.db.scalars(query))
+
+    def revoke(self, session_id: uuid.UUID) -> bool:
+        """Cierra una sesión propia. Devuelve False si no existe o es de otro usuario."""
+        result = self.db.execute(
+            delete(Session).where(Session.id == session_id, Session.user_id == self.user_id)
+        )
+        return result.rowcount == 1
+
+    def revoke_all(self) -> int:
+        result = self.db.execute(delete(Session).where(Session.user_id == self.user_id))
+        return result.rowcount
