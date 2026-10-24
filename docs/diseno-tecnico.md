@@ -21,8 +21,10 @@ Verificado en la documentación oficial (pricing actualizado el 2026-10-15). Los
 
 | Uso | Modelo | Variable |
 |---|---|---|
-| Principal | `gemini-3.8-flash` | `GEMINI_MODEL` |
+| Principal | `gemini-3.5-flash` | `GEMINI_MODEL` |
 | Respaldo (429 / cupo agotado) | `gemini-3.5-flash-lite` | `GEMINI_FALLBACK_MODEL` |
+
+**Por qué no `gemini-3.8-flash`.** En la prueba con la API real (2026-10-24) los modelos más nuevos (`3.6`, `3.7` y `3.8`) daban 503 «high demand» o no contestaban ni en 60 s, y su cupo gratuito es corto (`3.6` y `3.8`: **5 RPM y 20 RPD**, según AI Studio; el de `3.5-flash` aún no aparecía listado, anotarlo cuando salga). `gemini-3.5-flash` contestó en unos 10 s y, con «CI/CD» e «integración continua», dio el mismo `cache_slug`; `gemini-3.5-flash-lite` contestó en 5–10 s pero con slugs distintos. Cuando el principal agote su cupo diario o dé 429, el respaldo atiende el resto: **15 RPM y 500 RPD**. Volver a probar `3.8` cuando baje la demanda; cambiarlo es solo la variable de entorno.
 
 Salida estructurada (`response_mime_type: application/json` + `response_schema`) y validación con Pydantic antes de guardar.
 
@@ -559,7 +561,7 @@ COOKIE_SECURE=false
 SECRET_KEY=                         # clave del servidor para los códigos por correo (HMAC); larga y aleatoria
 SESSION_DAYS=30
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.5-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 AI_TIMEOUT_SECONDS=25               # espera máxima por llamada a Gemini
 YOUTUBE_API_KEY=
@@ -687,7 +689,7 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 
 ## 12. Pendientes
 
-- [ ] Anotar los límites reales de Gemini al crear la clave y ajustar `DAILY_CONCEPT_LIMIT`.
+- [ ] Anotar los límites reales de Gemini al crear la clave y ajustar `DAILY_CONCEPT_LIMIT`. Vistos el 2026-10-24: `3.5-flash-lite` 15 RPM / 500 RPD, `3.1-flash-lite` 15 RPM / 500 RPD, `3.6` y `3.8` 5 RPM / 20 RPD. Con 30 conceptos por usuario y día y pocos usuarios invitados, el respaldo (500 RPD) cubre el uso; falta ver el cupo de `3.5-flash`.
 - [ ] Confirmar el tiempo máximo de función en Vercel Hobby en el primer despliegue y ajustar `JOBS_MAX_PER_RUN`. Desde la 6a, `vercel.json` fija `maxDuration: 60` para `api/index.py` (el peor caso de `/process` son dos llamadas a Gemini de 25 s); si el despliegue lo rechazara, plan B: `/process` responde 202 y lo termina el reloj.
 - [ ] Verificar la pausa por inactividad y las copias de seguridad del plan gratuito de Supabase.
 - [ ] Después de la Fase 8: probar si una app de atajos de Android puede llamar al endpoint de Siri y si el *Web Share Target* sirve para capturar conceptos.

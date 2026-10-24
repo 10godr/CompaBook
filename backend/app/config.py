@@ -35,7 +35,7 @@ class Settings(BaseSettings):
     # Gemini (nivel gratuito). Los modelos están en diseno-tecnico.md §1.2; el de respaldo se usa
     # cuando el principal da 429, está caído o contesta algo inservible.
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-3.8-flash"
+    gemini_model: str = "gemini-3.5-flash"
     gemini_fallback_model: str | None = "gemini-3.5-flash-lite"
     # Espera máxima por llamada a Gemini; con el respaldo, el peor caso es el doble.
     ai_timeout_seconds: float = 25.0
