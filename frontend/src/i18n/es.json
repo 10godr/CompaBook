@@ -23,7 +23,23 @@
     },
     "session": "Sesión",
     "signedInAs": "Has entrado como {{email}}",
-    "logout": "Cerrar sesión"
+    "logout": "Cerrar sesión",
+    "changePassword": {
+      "title": "Cambiar contraseña",
+      "current": "Contraseña actual",
+      "new": "Contraseña nueva",
+      "submit": "Cambiar contraseña",
+      "done": "Contraseña cambiada. Cerramos tu sesión en los demás dispositivos."
+    },
+    "deleteAccount": {
+      "title": "Eliminar cuenta",
+      "description": "Se borran tu cuenta y todos tus datos. No se puede deshacer.",
+      "button": "Eliminar mi cuenta",
+      "confirmTitle": "¿Eliminar tu cuenta?",
+      "confirmText": "Se borrarán tu cuenta y todos tus datos de forma definitiva. Escribe tu contraseña para confirmar.",
+      "confirm": "Eliminar cuenta",
+      "cancel": "Cancelar"
+    }
   },
   "languages": {
     "es": "Español",
@@ -91,6 +107,7 @@
       "verifyNow": "Verificar mi correo",
       "registration_not_allowed": "El registro es solo por invitación.",
       "invalid_code": "El código no es correcto o ya caducó. Pide uno nuevo si hace falta.",
+      "wrong_password": "La contraseña actual no es correcta.",
       "rate_limited": "Demasiados intentos. Inténtalo de nuevo en {{minutes}} min.",
       "rate_limited_short": "Demasiados intentos. Inténtalo de nuevo en un momento.",
       "weak_password": {

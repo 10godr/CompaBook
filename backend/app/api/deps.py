@@ -1,6 +1,9 @@
+import secrets
+
 from fastapi import Depends, Header, Request, Response
 from sqlalchemy.orm import Session as DbSession
 
+from app.config import get_settings
 from app.db import get_db
 from app.errors import ApiError
 from app.models import User
@@ -15,6 +18,16 @@ def require_csrf_header(x_requested_with: str | None = Header(default=None)) -> 
     """
     if x_requested_with != "compabook":
         raise ApiError(403, "csrf", "Falta la cabecera X-Requested-With")
+
+
+def require_internal_secret(x_internal_secret: str | None = Header(default=None)) -> None:
+    """Protege /internal/*: solo pg_cron, que envía el secreto en `X-Internal-Secret`."""
+    expected = get_settings().internal_secret
+    if not expected:
+        raise ApiError(503, "internal_unavailable", "INTERNAL_SECRET no está configurado")
+    # Comparación en tiempo constante; el secreto nunca se registra ni se devuelve.
+    if x_internal_secret is None or not secrets.compare_digest(x_internal_secret, expected):
+        raise ApiError(401, "unauthorized", "No autorizado")
 
 
 def client_ip(request: Request) -> str:

@@ -23,7 +23,23 @@
     },
     "session": "Session",
     "signedInAs": "Signed in as {{email}}",
-    "logout": "Sign out"
+    "logout": "Sign out",
+    "changePassword": {
+      "title": "Change password",
+      "current": "Current password",
+      "new": "New password",
+      "submit": "Change password",
+      "done": "Password changed. We signed you out of your other devices."
+    },
+    "deleteAccount": {
+      "title": "Delete account",
+      "description": "Your account and all your data are deleted. This can't be undone.",
+      "button": "Delete my account",
+      "confirmTitle": "Delete your account?",
+      "confirmText": "Your account and all your data will be permanently deleted. Enter your password to confirm.",
+      "confirm": "Delete account",
+      "cancel": "Cancel"
+    }
   },
   "languages": {
     "es": "Español",
@@ -91,6 +107,7 @@
       "verifyNow": "Verify my email",
       "registration_not_allowed": "Sign-up is invitation only.",
       "invalid_code": "The code is incorrect or has expired. Request a new one if needed.",
+      "wrong_password": "The current password is incorrect.",
       "rate_limited": "Too many attempts. Try again in {{minutes}} min.",
       "rate_limited_short": "Too many attempts. Try again in a moment.",
       "weak_password": {

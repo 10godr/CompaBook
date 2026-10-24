@@ -21,7 +21,7 @@ interface ErrorBody {
 }
 
 interface Options {
-  method?: 'GET' | 'POST'
+  method?: 'GET' | 'POST' | 'PATCH' | 'DELETE'
   body?: unknown
 }
 

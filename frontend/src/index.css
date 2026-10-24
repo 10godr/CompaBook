@@ -275,7 +275,12 @@ h2 {
 }
 
 /* Botones: solo los de la página temporal de prueba; los definitivos llegan con las pantallas. */
-.card button:not(.btn) {
+/* `display: contents` mantiene el diseño: el contenedor solo sirve para acotar estos estilos. */
+.poc {
+  display: contents;
+}
+
+.poc .card button {
   min-height: var(--touch-min);
   padding: 0 var(--space-4);
   background: var(--accent);
@@ -558,8 +563,51 @@ h2 {
   border-color: var(--border-control);
 }
 
+/* Peligro: transparente con texto rojo; siempre se usa con confirmación. */
+.btn-danger {
+  background: transparent;
+  color: var(--status-error);
+  border-color: var(--border-control);
+}
+
 .link {
   color: var(--accent-text);
+}
+
+/* Modal: hoja inferior en el móvil y ventana centrada de 400 px en escritorio. */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.modal {
+  width: 100%;
+  max-width: 400px;
+  max-height: 90dvh;
+  overflow-y: auto;
+  padding: var(--space-6) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  background: var(--bg-floating);
+  box-shadow: var(--shadow-float);
+  border-radius: var(--radius-modal) var(--radius-modal) 0 0;
+}
+
+@media (min-width: 768px) {
+  .modal-backdrop {
+    align-items: center;
+  }
+
+  .modal {
+    border-radius: var(--radius-modal);
+    padding-bottom: var(--space-6);
+  }
 }
 
 /* Mensajes en línea: fondo del color de estado al 12 % y borde izquierdo de 3 px. */

@@ -83,7 +83,7 @@ export default function PruebaPush() {
   }
 
   return (
-    <>
+    <div className="poc">
       <h1>Prueba de push</h1>
       <div className="card">
         <button onClick={status}>Ver estado</button>
@@ -97,6 +97,6 @@ export default function PruebaPush() {
           <code key={`${index}-${line}`}>{line}</code>
         ))}
       </div>
-    </>
+    </div>
   )
 }

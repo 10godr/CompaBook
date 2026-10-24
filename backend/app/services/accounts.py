@@ -369,3 +369,68 @@ def reset_password(
     user.password_hash = security.hash_password(new_password)
     SessionRepository(db, user.id).revoke_all()
     db.commit()
+
+
+# --- Mi cuenta -------------------------------------------------------------------------------
+
+PASSWORD_CHECK_LIMIT = 5  # comprobaciones de la contraseña actual cada 15 minutos y usuario
+PASSWORD_CHECK_WINDOW = timedelta(minutes=15)
+
+
+def update_profile(
+    db: DbSession, user: User, *, language: str | None, timezone: str | None
+) -> User:
+    if language is not None:
+        user.language = language
+    if timezone is not None:
+        user.timezone = timezone
+    db.commit()
+    return user
+
+
+def _check_current_password(db: DbSession, user: User, password: str, now: datetime) -> None:
+    """Pide la contraseña actual antes de una acción delicada, con límite de intentos.
+
+    Sin límite, quien robara una sesión podría adivinar la contraseña desde aquí.
+    """
+    enforce_rate_limit(
+        db, "password_check", str(user.id), PASSWORD_CHECK_LIMIT, PASSWORD_CHECK_WINDOW, now
+    )
+    if not security.verify_password(password, user.password_hash):
+        raise ApiError(400, "wrong_password", "La contraseña actual no es correcta")
+
+
+def change_password(
+    db: DbSession,
+    user: User,
+    *,
+    current_token: str | None,
+    current_password: str,
+    new_password: str,
+    now: datetime | None = None,
+) -> None:
+    """Cambia la contraseña y cierra las demás sesiones; la actual sigue abierta."""
+    now = now or utcnow()
+    _check_current_password(db, user, current_password, now)
+    try:
+        security.validate_password(new_password)
+    except security.WeakPassword as error:
+        raise ApiError(422, "weak_password", "Contraseña no válida", reason=error.code) from error
+
+    user.password_hash = security.hash_password(new_password)
+    keep = security.hash_token(current_token) if current_token else ""
+    SessionRepository(db, user.id).revoke_others(keep)
+    db.commit()
+
+
+def delete_account(
+    db: DbSession, user: User, *, password: str, now: datetime | None = None
+) -> None:
+    """Borra el usuario y, en cascada, sus sesiones y códigos (y más adelante sus conceptos).
+
+    No toca `allowed_emails`: la invitación es del administrador, no del usuario.
+    """
+    now = now or utcnow()
+    _check_current_password(db, user, password, now)
+    db.delete(user)
+    db.commit()

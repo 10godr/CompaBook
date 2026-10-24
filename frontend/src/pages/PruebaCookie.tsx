@@ -38,7 +38,7 @@ export default function PruebaCookie() {
   }
 
   return (
-    <>
+    <div className="poc">
       <h1>Prueba de cookie</h1>
       <div className="card">
         <p>Modo PWA instalada: {isStandalone() ? 'sí' : 'no (navegador)'}</p>
@@ -54,6 +54,6 @@ export default function PruebaCookie() {
           <code key={line}>{line}</code>
         ))}
       </div>
-    </>
+    </div>
   )
 }
