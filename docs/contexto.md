@@ -318,7 +318,7 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 | 3. Aprobación | Revisión del equipo | ✅ (PR #1, 2026-10-22) |
 | 4. Fundamentos y prueba de riesgos | Estructura, CI, Docker local, FastAPI, SQLAlchemy + Alembic, frontend base con i18n y tema, despliegue en Vercel. **Prueba de concepto** de lo que puede tumbar la arquitectura: FastAPI bajo `/api` en Vercel, cookie en Safari con la PWA instalada, push al iPhone y `pg_cron` → `pg_net` → Vercel | 🟡 Hecha; falta el cierre a partir del 2026-10-30 (prueba H de la cookie, parar `pg_cron` de prueba, retirar el código temporal) |
 | 5. Cuentas | Registro solo por correos permitidos, verificación por código, login, recuperación, idioma, eliminar cuenta, suspensión de cuentas, límites de intentos | ✅ (PR #18 a #23, 2026-10-23). Ver `docs/cierre-fase-5.md` |
-| 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento (sin videos), tablas `concepts`, `concept_cards` y `processing_jobs`, panel de carga por etapas, **Reintentar** manual, búsqueda y eliminación, límite diario | |
+| 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento (sin videos), tablas `concepts`, `concept_cards` y `processing_jobs`, panel de carga por etapas, **Reintentar** manual, búsqueda y eliminación, límite diario ✅ (PR #25 a #29, 2026-10-24). Falta la prueba en producción. Ver `docs/cierre-fase-6a.md` |
 | 6b. Cola, videos y fichas compartidas | Reloj de respaldo (`/internal/jobs`) con reintentos automáticos, videos con caché, alias y reutilización de fichas | |
 | 7. Recordatorios | Ajustes de hora y días, push, envío desde el reloj. Pruebas en iPhone y en Android | |
 | 8. Siri | Tokens personales, endpoint y guía del atajo | |
