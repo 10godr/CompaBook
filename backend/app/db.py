@@ -1,7 +1,8 @@
 from collections.abc import Iterator
+from datetime import datetime
 from functools import lru_cache
 
-from sqlalchemy import Engine, create_engine
+from sqlalchemy import DateTime, Engine, create_engine
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 from sqlalchemy.pool import NullPool
 
@@ -9,7 +10,8 @@ from app.config import get_settings
 
 
 class Base(DeclarativeBase):
-    pass
+    # Todas las fechas son timestamptz en UTC (diseno-tecnico.md §3).
+    type_annotation_map = {datetime: DateTime(timezone=True)}
 
 
 class DatabaseNotConfigured(RuntimeError):
