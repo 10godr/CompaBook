@@ -149,12 +149,12 @@ update api_tokens set revoked_at = now() where user_id = (select id from users w
 delete from users where email = 'amigo@example.com';
 ```
 
-Para corregir una ficha compartida incorrecta (a verificar al implementarla): borrar la ficha y su alias, y volver a poner en cola los conceptos que la usaban.
+Para corregir una ficha compartida incorrecta: borrar la ficha (sus alias caen en cascada), borrar sus videos y volver a poner en cola los conceptos que la usaban.
 
 ```sql
 begin;
-delete from concept_aliases where cache_slug = 'ci-cd' and language = 'es';
-delete from concept_cards   where cache_slug = 'ci-cd' and language = 'es';  -- concepts.card_id queda en nulo
+delete from video_cache   where cache_slug = 'ci-cd' and language = 'es';
+delete from concept_cards where cache_slug = 'ci-cd' and language = 'es';  -- sus alias caen en cascada; concepts.card_id queda en nulo
 update processing_jobs set status = 'pending', stage = 'queued', attempts = 0, next_run_at = now()
  where concept_id in (select id from concepts where card_id is null);
 commit;
@@ -233,6 +233,7 @@ concept_cards (                      -- COMPARTIDA entre usuarios: una ficha por
   example_code  text,
   example_code_language text,
   model         text not null,
+  youtube_search_query text,         -- qué se busca en YouTube, en el idioma de la ficha; nulo en las de la Fase 6a
   created_at    timestamptz,
   unique (cache_slug, language)
 )
@@ -242,7 +243,8 @@ concept_aliases (                    -- «integración continua» → 'ci-cd'; s
   alias        text not null check (char_length(alias) <= 60),  -- título normalizado (§5.5)
   cache_slug   text not null,
   created_at   timestamptz default now(),
-  primary key (language, alias)
+  primary key (language, alias),
+  foreign key (cache_slug, language) references concept_cards (cache_slug, language) on delete cascade
 )
 
 video_cache (                        -- compartida entre usuarios
