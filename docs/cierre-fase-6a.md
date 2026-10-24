@@ -1,6 +1,6 @@
 # Cierre de la Fase 6a: Cuaderno y ficha con Gemini
 
-Cerrada el 2026-10-24. Entregada en los PR #25 a #29. Verificada en local con **Gemini real** y un recorrido en Chrome (33 comprobaciones). Pendiente de que Emile la pruebe en producción (ver «Verificación en producción»).
+Cerrada el 2026-10-24. Entregada en los PR #25 a #29. Verificada en local con **Gemini real** y un recorrido en Chrome (33 comprobaciones), y **en producción** por Emile el mismo día (ver «Verificación en producción»).
 
 ## Qué entrega
 
@@ -83,14 +83,14 @@ Variables del backend (Vercel en Production y Preview, y `backend/.env` en local
 
 Base de datos: la migración `0003_conceptos` se aplicó a `compabook-prod` a mano (SQL de Alembic en el editor de Supabase). En local, `alembic upgrade head`.
 
-## Verificación en producción (la hace Emile)
+## Verificación en producción
 
-Con una cuenta invitada en `https://compabook.vercel.app`:
+Emile la probó el 2026-10-24 con una cuenta invitada en `https://compabook.vercel.app`: todo funcionó sin ningún error, el contador de Inicio subió y en los registros de Vercel aparecieron las líneas de Gemini. Los pasos probados fueron:
 
 1. Añadir un concepto desde Inicio: aparece el panel de carga, pasa de «En cola» a «Escribiendo» enseguida y termina en la ficha. Anotar cuánto tarda.
 2. Si da «No se pudo generar», pulsar Reintentar (los 503 son normales hoy).
 3. Que el contador de Inicio suba y que la ficha aparezca en el Cuaderno; buscarla y eliminarla.
-4. Comprobar que una generación que pase de 10 s no se corta (confirma `maxDuration: 60`). Si Vercel la cortara, plan B: `/process` responde 202 y la termina el reloj de la 6b.
+4. Comprobar que una generación que pase de 10 s no se corta (confirma `maxDuration: 60`). No se reportaron cortes; si Vercel cortara alguna, plan B: `/process` responde 202 y la termina el reloj de la 6b.
 5. En los registros de Vercel solo deben verse líneas `gemini model=… outcome=… ms=…`, sin el concepto.
 
 ## Criterios de aceptación de la 6a (`diseno-tecnico.md` §11)
@@ -99,7 +99,7 @@ Con una cuenta invitada en `https://compabook.vercel.app`:
 |---|---|
 | El concepto se guarda aunque Gemini esté caído | ✅ Pruebas y recorrido real |
 | Ficha en el idioma del usuario, venga el concepto en el que venga | ✅ Pruebas (el idioma de la ficha es el de la cuenta) |
-| «En cola» dura menos de 5 s | 🟡 En local pasa a «Escribiendo» al instante; falta medirlo en producción |
+| «En cola» dura menos de 5 s | ✅ En local pasa a «Escribiendo» al instante; en producción no se notó demora (no se cronometró) |
 | Panel de carga por etapas, sin congelar la app | ✅ |
 | Un fallo muestra **Reintentar** y funciona; si la ficha existía, no se llama a Gemini | ✅ Pruebas y recorrido real |
 | Límite diario con mensaje claro y sin crear el concepto | ✅ |
