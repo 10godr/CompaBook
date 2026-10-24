@@ -10,8 +10,9 @@ from app.config import get_settings
 from app.db import get_db, get_engine
 from app.main import app
 from app.services import accounts
+from app.services.ai import get_ai_provider
 from app.services.email import get_email_provider
-from tests.helpers import NOW, FakeEmailProvider
+from tests.helpers import NOW, FakeAIProvider, FakeEmailProvider
 
 
 @pytest.fixture
@@ -41,6 +42,11 @@ def mailer() -> FakeEmailProvider:
 
 
 @pytest.fixture
+def ai() -> FakeAIProvider:
+    return FakeAIProvider()
+
+
+@pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
     """Reloj controlable: `clock["now"] = ...` adelanta o atrasa el tiempo de los servicios."""
     state = {"now": NOW}
@@ -52,6 +58,7 @@ def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
 def client(
     orm: DbSession,
     mailer: FakeEmailProvider,
+    ai: FakeAIProvider,
     clock: dict[str, datetime],
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
@@ -60,5 +67,6 @@ def client(
     monkeypatch.setattr(get_settings(), "cookie_secure", True)
     app.dependency_overrides[get_db] = lambda: orm
     app.dependency_overrides[get_email_provider] = lambda: mailer
+    app.dependency_overrides[get_ai_provider] = lambda: ai
     yield TestClient(app)
     app.dependency_overrides.clear()
