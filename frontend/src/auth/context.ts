@@ -14,6 +14,8 @@ export interface AuthState {
   login: (email: string, password: string) => Promise<void>
   setUser: (user: User) => void
   logout: () => Promise<void>
+  /** Da la sesión por cerrada en este dispositivo, sin llamar a la API (p. ej. tras eliminar la cuenta). */
+  clearSession: () => void
 }
 
 export const AuthContext = createContext<AuthState | null>(null)

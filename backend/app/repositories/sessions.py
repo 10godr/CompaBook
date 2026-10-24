@@ -55,6 +55,15 @@ class SessionRepository:
         result = self.db.execute(delete(Session).where(Session.user_id == self.user_id))
         return result.rowcount
 
+    def revoke_others(self, keep_token_hash: str) -> int:
+        """Cierra todas las sesiones propias salvo la del token indicado (la actual)."""
+        result = self.db.execute(
+            delete(Session).where(
+                Session.user_id == self.user_id, Session.token_hash != keep_token_hash
+            )
+        )
+        return result.rowcount
+
 
 # --- Búsquedas por token: se usan ANTES de saber quién es el usuario -------------------------
 # La cookie es la credencial; por eso estas funciones no reciben `user_id`. Ningún endpoint

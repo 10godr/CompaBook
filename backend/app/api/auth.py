@@ -1,11 +1,11 @@
 from typing import Literal
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from sqlalchemy.orm import Session as DbSession
 
 from app.api.deps import client_ip, require_csrf_header
+from app.api.validators import check_timezone
 from app.db import get_db
 from app.models import User
 from app.services import accounts
@@ -31,11 +31,7 @@ class RegisterBody(BaseModel):
     @field_validator("timezone")
     @classmethod
     def known_timezone(cls, value: str) -> str:
-        try:
-            ZoneInfo(value)
-        except (ZoneInfoNotFoundError, ValueError, OSError) as error:
-            raise ValueError("zona horaria desconocida") from error
-        return value
+        return check_timezone(value)
 
     @field_validator("accept_terms")
     @classmethod

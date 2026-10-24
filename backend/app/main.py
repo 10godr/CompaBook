@@ -4,7 +4,7 @@ from fastapi import APIRouter, FastAPI, HTTPException
 from sqlalchemy import text
 
 from app import poc, poc_cron, poc_push
-from app.api import auth, me
+from app.api import auth, internal, me
 from app.config import get_settings
 from app.db import get_engine
 from app.errors import register_error_handlers
@@ -18,6 +18,7 @@ register_error_handlers(app)
 router = APIRouter(prefix="/api/v1")
 router.include_router(auth.router)
 router.include_router(me.router)
+router.include_router(internal.router)
 router.include_router(poc.router)
 router.include_router(poc_push.router)
 router.include_router(poc_cron.router)

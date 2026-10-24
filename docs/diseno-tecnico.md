@@ -200,7 +200,7 @@ email_codes (
 
 rate_limit_events (
   id         bigint generated always as identity pk,
-  bucket     text not null,          -- login_fail | login_lock | login_ip | register_ip | email_send | concept_create | retry | siri
+  bucket     text not null,          -- login_fail | login_lock | login_ip | register_ip | email_send | password_check | concept_create | retry | siri
   key        text not null,          -- email+ip, ip, email, user_id o token_id según el bucket
   created_at timestamptz not null default now()
 )
@@ -469,9 +469,11 @@ Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_
 | `POST` | `/auth/forgot-password` | `{ email, language? }` → siempre 200; solo envía el código a cuentas verificadas y no suspendidas; 429 al pasar de 5 envíos por hora y correo |
 | `POST` | `/auth/reset-password` | `{ email, code, new_password }` → 200 y cierra **todas** las sesiones; 400 `invalid_code`; 422 `weak_password` (se comprueba antes de gastar un intento del código) |
 | `GET` | `/me` | Usuario actual (`email`, `language`, `timezone`); más adelante, el uso del día (`concepts_today`, `daily_limit`). 401 `unauthorized` sin sesión vigente. Renueva la sesión y reenvía la cookie si pasaron 24 h desde el último uso |
-| `PATCH` | `/me` | `{ language?, timezone? }` |
-| `POST` | `/me/change-password` | `{ current_password, new_password }` |
-| `DELETE` | `/me` | `{ password }` → elimina cuenta y datos |
+| `PATCH` | `/me` | `{ language?, timezone? }` → 200 con `{ user }`; 422 si no hay nada que cambiar, el idioma no es `es`/`en` o la zona horaria no existe |
+| `POST` | `/me/change-password` | `{ current_password, new_password }` → 200 y cierra **las demás** sesiones (la actual sigue); 400 `wrong_password`; 422 `weak_password`; 429 |
+| `DELETE` | `/me` | `{ password }` → 200, elimina la cuenta y, en cascada, sus datos, y borra la cookie; 400 `wrong_password`; 429. No toca `allowed_emails`: la invitación es del administrador |
+
+Comprobar la contraseña actual (cambiarla o eliminar la cuenta) tiene un límite común de **5 comprobaciones cada 15 minutos por usuario** (`password_check`), acierte o no: sin él, quien robara una sesión podría adivinar la contraseña desde estos endpoints. Todos los `PATCH`, `POST` y `DELETE` exigen `X-Requested-With: compabook`.
 
 ### Cuaderno
 
@@ -511,7 +513,7 @@ Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_
 |---|---|---|
 | `POST` | `/internal/jobs` | Solo con `X-Internal-Secret` |
 | `POST` | `/internal/reminders` | Solo con `X-Internal-Secret` |
-| `POST` | `/internal/cleanup` | Solo con `X-Internal-Secret` |
+| `POST` | `/internal/cleanup` | Solo con `X-Internal-Secret` (503 si `INTERNAL_SECRET` no está definida, 401 si falta o no coincide; no exige `X-Requested-With`, porque lo llama `pg_cron`). Borra sesiones y códigos caducados, eventos de límite de más de 2 días y cuentas sin verificar de más de 7 días; responde con cuántas filas quitó de cada cosa. Solo registra números |
 | `GET` | `/health` | Sin auth; comprueba la conexión a la base de datos |
 
 ---
