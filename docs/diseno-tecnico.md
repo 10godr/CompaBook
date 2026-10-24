@@ -296,7 +296,9 @@ api_tokens (                         -- atajo de Siri
 )
 ```
 
-Índices: `concepts (user_id, created_at desc)`, `pg_trgm` sobre `concepts.title` para la búsqueda, `processing_jobs (status, next_run_at)`, `sessions (expires_at)`, `rate_limit_events (bucket, key, created_at)`.
+Índices: `concepts (user_id, created_at desc)`, `processing_jobs (status, next_run_at)`, `sessions (expires_at)`, `rate_limit_events (bucket, key, created_at)`.
+
+La búsqueda del Cuaderno es un `ILIKE` sobre `concepts.title` **filtrado por usuario** (con `%`, `_` y `\` escapados), sin `pg_trgm`: con cientos de conceptos por usuario no hace falta un índice de texto, y se evita activar otra extensión en producción. Si el Cuaderno creciera mucho, se añade entonces.
 
 La zona horaria vive solo en `users.timezone`; los recordatorios la leen de ahí.
 
@@ -314,6 +316,12 @@ La zona horaria vive solo en `users.timezone`; los recordatorios la leen de ahí
 4. Mientras tanto, el frontend consulta el estado (§4.5).
 
 Si la pestaña se cierra o la petición se corta, el trabajo sigue `pending` o queda `processing` con `locked_at` antiguo, y el reloj lo recoge.
+
+**Fase 6a (antes de que exista el reloj).** Las tablas y `/process` ya tienen su forma final, pero no hay quien recoja los trabajos:
+- Si falla el paso 1, el trabajo pasa **directamente a `failed`** (sin espera ni reintento automático) y el usuario pulsa **Reintentar**. Los reintentos automáticos con `next_run_at` llegan con `/internal/jobs` en la 6b.
+- `/process` **no mantiene abierta ninguna transacción mientras llama a Gemini**: reclama el trabajo y confirma, llama a la IA y luego guarda la ficha en otra transacción.
+- Un trabajo `processing` con `locked_at` de hace más de 5 minutos (la función murió a medias) se trata como fallido: el estado lo informa como `failed` y **Reintentar** lo acepta.
+- Sin videos todavía: la ficha se entrega con `videos: []` y la pantalla no muestra esa sección.
 
 ### 4.2 El reloj
 
@@ -385,7 +393,7 @@ En cada ejecución de `/internal/reminders`, la consulta selecciona solo usuario
 2. Enviar si: el día de la semana está en `weekdays`, la hora local está entre `local_time` y `local_time + 2 h`, y `last_sent_on` ≠ hoy (local).
 3. Elegir un concepto al azar con ficha completada; si no hay ninguno, no enviar.
 4. Mensaje (en su idioma): «Tienes 12 conceptos en tu Cuaderno — repasa "CI/CD"».
-5. Guardar `last_sent_on = hoy`. Al tocar la notificación se abre `/concepts/{id}`.
+5. Guardar `last_sent_on = hoy`. Al tocar la notificación se abre `/cuaderno/:id` (ruta de la web; la API es `/concepts/{id}`).
 
 Con esta lógica, si una ejecución se retrasa o falla, la siguiente envía el recordatorio igualmente y nunca se manda dos veces el mismo día. La ventana de 2 h evita avisos a deshora tras una caída larga, o al activar el recordatorio cuando su hora ya pasó.
 
