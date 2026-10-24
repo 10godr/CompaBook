@@ -4,6 +4,7 @@ import AuthProvider from './auth/AuthProvider'
 import { PublicOnly, RequireAuth } from './auth/guards'
 import AuthLayout from './components/AuthLayout'
 import Layout from './components/Layout'
+import Concept from './pages/Concept'
 import ForgotPassword from './pages/ForgotPassword'
 import Home from './pages/Home'
 import Login from './pages/Login'
@@ -38,6 +39,7 @@ function App() {
             <Route element={<Layout />}>
               <Route index element={<Home />} />
               <Route path="cuaderno" element={<Notebook />} />
+              <Route path="cuaderno/:id" element={<Concept />} />
               <Route path="ajustes" element={<Settings />} />
             </Route>
           </Route>

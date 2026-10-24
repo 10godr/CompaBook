@@ -7,10 +7,35 @@
   },
   "home": {
     "titleLine1": "Understand any concept",
-    "titleLine2": "in a couple of minutes."
+    "titleLine2": "in a couple of minutes.",
+    "add": {
+      "label": "What concept do you want to understand?",
+      "placeholder": "For example: CI/CD",
+      "submit": "Add",
+      "usage": "{{used}} of {{limit}} concepts today",
+      "limitReached": "You've reached today's limit. You can add more tomorrow."
+    },
+    "recent": "Recent concepts",
+    "seeAll": "See the whole Notebook",
+    "emptyRecent": "You haven't added any yet."
   },
   "notebook": {
-    "title": "Notebook"
+    "title": "Notebook",
+    "search": "Search your Notebook",
+    "noResults": "No concepts match “{{query}}”.",
+    "emptyTitle1": "Your Notebook is empty",
+    "emptyTitle2": "Add your first concept.",
+    "emptyAction": "Go to Home",
+    "loadMore": "Load more",
+    "loadError": "We couldn't load your concepts.",
+    "retry": "Retry",
+    "options": "Options for {{title}}",
+    "delete": "Delete",
+    "deleteTitle": "Delete this concept?",
+    "deleteText": "“{{title}}” will be removed from your Notebook. This can't be undone.",
+    "confirmDelete": "Delete",
+    "cancel": "Cancel",
+    "deleted": "Concept deleted"
   },
   "settings": {
     "title": "Settings",
@@ -123,7 +148,46 @@
       "passwordShort": "The password must be at least 8 characters long.",
       "passwordRequired": "Enter your password.",
       "termsRequired": "You need to accept the terms to create the account.",
-      "codeIncomplete": "Enter all 6 digits of the code."
+      "codeIncomplete": "Enter all 6 digits of the code.",
+      "daily_limit_reached": "You've reached today's concept limit. You can add more tomorrow.",
+      "not_found": "We couldn't find that concept.",
+      "not_retryable": "This concept doesn't need a retry."
     }
+  },
+  "common": {
+    "loading": "Loading…"
+  },
+  "status": {
+    "pending": "Queued",
+    "processing": "Generating…",
+    "failed": "Error"
+  },
+  "concept": {
+    "back": "Notebook",
+    "notFound": "We couldn't find this concept.",
+    "noCard": "This card isn't available.",
+    "youWrote": "You wrote: {{title}}",
+    "sections": {
+      "what_is": "What it is",
+      "what_for": "What it's for",
+      "example": "Example"
+    },
+    "copy": "Copy",
+    "copied": "Copied",
+    "stages": {
+      "queued": "Queued",
+      "writing": "Writing",
+      "done": "Done!"
+    },
+    "progress": {
+      "label": "Progress",
+      "queued": "In line, almost there…",
+      "writing": "Writing the explanation…",
+      "done": "Done!"
+    },
+    "slow": "This is taking longer than usual. You can come back later: you'll find it in your Notebook.",
+    "failed": "Couldn't generate",
+    "failedHelp": "Your concept is saved. Try again.",
+    "retry": "Retry"
   }
 }

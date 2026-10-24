@@ -7,10 +7,35 @@
   },
   "home": {
     "titleLine1": "Entiende cualquier concepto",
-    "titleLine2": "en un par de minutos."
+    "titleLine2": "en un par de minutos.",
+    "add": {
+      "label": "¿Qué concepto quieres entender?",
+      "placeholder": "Por ejemplo: CI/CD",
+      "submit": "Añadir",
+      "usage": "{{used}} de {{limit}} conceptos hoy",
+      "limitReached": "Llegaste al límite de hoy. Mañana podrás añadir más."
+    },
+    "recent": "Últimos conceptos",
+    "seeAll": "Ver todo el Cuaderno",
+    "emptyRecent": "Todavía no has añadido ninguno."
   },
   "notebook": {
-    "title": "Cuaderno"
+    "title": "Cuaderno",
+    "search": "Buscar en tu Cuaderno",
+    "noResults": "No hay conceptos que coincidan con «{{query}}».",
+    "emptyTitle1": "Tu Cuaderno está vacío",
+    "emptyTitle2": "Añade tu primer concepto.",
+    "emptyAction": "Ir a Inicio",
+    "loadMore": "Cargar más",
+    "loadError": "No pudimos cargar tus conceptos.",
+    "retry": "Reintentar",
+    "options": "Opciones de {{title}}",
+    "delete": "Eliminar",
+    "deleteTitle": "¿Eliminar este concepto?",
+    "deleteText": "Se borra «{{title}}» de tu Cuaderno. No se puede deshacer.",
+    "confirmDelete": "Eliminar",
+    "cancel": "Cancelar",
+    "deleted": "Concepto eliminado"
   },
   "settings": {
     "title": "Ajustes",
@@ -123,7 +148,46 @@
       "passwordShort": "La contraseña debe tener al menos 8 caracteres.",
       "passwordRequired": "Escribe tu contraseña.",
       "termsRequired": "Tienes que aceptar los términos para crear la cuenta.",
-      "codeIncomplete": "Escribe los 6 dígitos del código."
+      "codeIncomplete": "Escribe los 6 dígitos del código.",
+      "daily_limit_reached": "Llegaste al límite de conceptos de hoy. Mañana podrás añadir más.",
+      "not_found": "No encontramos ese concepto.",
+      "not_retryable": "Este concepto no necesita reintentarse."
     }
+  },
+  "common": {
+    "loading": "Cargando…"
+  },
+  "status": {
+    "pending": "En cola",
+    "processing": "Generando…",
+    "failed": "Error"
+  },
+  "concept": {
+    "back": "Cuaderno",
+    "notFound": "No encontramos este concepto.",
+    "noCard": "Esta ficha no está disponible.",
+    "youWrote": "Escribiste: {{title}}",
+    "sections": {
+      "what_is": "Qué es",
+      "what_for": "Para qué sirve",
+      "example": "Ejemplo"
+    },
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "stages": {
+      "queued": "En cola",
+      "writing": "Escribiendo",
+      "done": "¡Listo!"
+    },
+    "progress": {
+      "label": "Progreso",
+      "queued": "En cola, ya casi le toca…",
+      "writing": "Escribiendo la explicación…",
+      "done": "¡Listo!"
+    },
+    "slow": "Está tardando más de lo normal. Puedes volver más tarde: la verás en tu Cuaderno.",
+    "failed": "No se pudo generar",
+    "failedHelp": "Tu concepto está guardado. Inténtalo de nuevo.",
+    "retry": "Reintentar"
   }
 }

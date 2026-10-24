@@ -12,7 +12,8 @@ export interface Call {
   headers: Record<string, string>
 }
 
-type Route = Reply | ((body: unknown) => Reply)
+// Una ruta puede ser una respuesta fija o una función (también asíncrona, para controlar cuándo llega).
+type Route = Reply | ((body: unknown) => Reply | Promise<Reply>)
 
 // Sustituye `fetch` por una API simulada. Las rutas se escriben como "POST /auth/login".
 // Una ruta sin simular hace fallar la petición, igual que una red caída.
@@ -28,7 +29,7 @@ export function mockApi(routes: Record<string, Route>): Call[] {
 
       const route = routes[`${method} ${path}`]
       if (!route) throw new TypeError(`Sin ruta simulada: ${method} ${path}`)
-      const reply = typeof route === 'function' ? route(body) : route
+      const reply = typeof route === 'function' ? await route(body) : route
       return new Response(JSON.stringify(reply.body ?? {}), {
         status: reply.status ?? 200,
         headers: { 'Content-Type': 'application/json' },
