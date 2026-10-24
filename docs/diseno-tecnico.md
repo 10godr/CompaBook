@@ -483,7 +483,7 @@ Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_
 | `POST` | `/auth/logout` | Cierra la sesión actual |
 | `POST` | `/auth/forgot-password` | `{ email, language? }` → siempre 200; solo envía el código a cuentas verificadas y no suspendidas; 429 al pasar de 5 envíos por hora y correo |
 | `POST` | `/auth/reset-password` | `{ email, code, new_password }` → 200 y cierra **todas** las sesiones; 400 `invalid_code`; 422 `weak_password` (se comprueba antes de gastar un intento del código) |
-| `GET` | `/me` | Usuario actual (`email`, `language`, `timezone`); más adelante, el uso del día (`concepts_today`, `daily_limit`). 401 `unauthorized` sin sesión vigente. Renueva la sesión y reenvía la cookie si pasaron 24 h desde el último uso |
+| `GET` | `/me` | `{ user: { email, language, timezone }, usage: { concepts_today, daily_limit } }`; el uso cuenta desde la medianoche local del usuario. 401 `unauthorized` sin sesión vigente. Renueva la sesión y reenvía la cookie si pasaron 24 h desde el último uso |
 | `PATCH` | `/me` | `{ language?, timezone? }` → 200 con `{ user }`; 422 si no hay nada que cambiar, el idioma no es `es`/`en` o la zona horaria no existe |
 | `POST` | `/me/change-password` | `{ current_password, new_password }` → 200 y cierra **las demás** sesiones (la actual sigue); 400 `wrong_password`; 422 `weak_password`; 429 |
 | `DELETE` | `/me` | `{ password }` → 200, elimina la cuenta y, en cascada, sus datos, y borra la cookie; 400 `wrong_password`; 429. No toca `allowed_emails`: la invitación es del administrador |
@@ -494,13 +494,15 @@ Comprobar la contraseña actual (cambiarla o eliminar la cuenta) tiene un límit
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/concepts` | `{ title }` (1–200 caracteres) → 201 con `id` y `status`; 429 `daily_limit_reached` |
-| `POST` | `/concepts/{id}/process` | Genera la ficha al momento → 200 con el estado final, o 202 si ya la procesa otro |
-| `GET` | `/concepts` | `q`, `limit`, `cursor`; orden por fecha descendente |
-| `GET` | `/concepts/{id}` | Concepto + ficha + videos + estado |
+| `POST` | `/concepts` | `{ title }` (1–200 caracteres, sin espacios a los lados) → 201 `{ id, status }`; 422 `validation_error`; 429 `daily_limit_reached` (con `limit` y `retry_after` hasta la medianoche local). El concepto nace en el idioma del usuario |
+| `POST` | `/concepts/{id}/process` | Genera la ficha al momento → 200 `{ status, stage, attempts }` con el estado final (`completed`, o `failed` si la IA falló), o 202 con el estado actual si ya la procesa otro. Si ya estaba resuelto, 200 sin llamar a la IA |
+| `GET` | `/concepts` | `q` (hasta 200), `limit` (1–50, por defecto 20), `cursor` (opaco, el `next_cursor` anterior) → `{ items, next_cursor }` por fecha descendente; cada item lleva `id`, `title`, `language`, `created_at`, `card_title` (nulo sin ficha), `status`, `stage`, `attempts`. Cursor o `limit` inválidos: 422 |
+| `GET` | `/concepts/{id}` | Lo mismo que un item, más `source`, `card` (`canonical_title`, `what_is`, `what_for`, `example`, `example_code`, `example_code_language`; nulo sin ficha) y `videos` (`[]` hasta la 6b) |
 | `GET` | `/concepts/{id}/status` | `{ status, stage, attempts }` para el polling |
-| `POST` | `/concepts/{id}/retry` | Solo si `failed` → 202; 429 `daily_limit_reached` |
-| `DELETE` | `/concepts/{id}` | Eliminar |
+| `POST` | `/concepts/{id}/retry` | Solo si `failed` (o `processing` abandonado) → 202 con el nuevo estado `pending`; 409 `not_retryable` si no; 429 `daily_limit_reached` |
+| `DELETE` | `/concepts/{id}` | → 200 `{ ok: true }`. Borra el concepto y su trabajo; la ficha compartida se queda. No devuelve el cupo del día |
+
+Un concepto o trabajo ajeno responde 404 `not_found` en todos estos endpoints, igual que uno inexistente. Todos los `POST` y `DELETE` exigen `X-Requested-With: compabook`.
 
 ### Recordatorios y notificaciones
 
@@ -686,6 +688,6 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 ## 12. Pendientes
 
 - [ ] Anotar los límites reales de Gemini al crear la clave y ajustar `DAILY_CONCEPT_LIMIT`.
-- [ ] Confirmar el tiempo máximo de función en Vercel Hobby en el primer despliegue y ajustar `JOBS_MAX_PER_RUN`.
+- [ ] Confirmar el tiempo máximo de función en Vercel Hobby en el primer despliegue y ajustar `JOBS_MAX_PER_RUN`. Desde la 6a, `vercel.json` fija `maxDuration: 60` para `api/index.py` (el peor caso de `/process` son dos llamadas a Gemini de 25 s); si el despliegue lo rechazara, plan B: `/process` responde 202 y lo termina el reloj.
 - [ ] Verificar la pausa por inactividad y las copias de seguridad del plan gratuito de Supabase.
 - [ ] Después de la Fase 8: probar si una app de atajos de Android puede llamar al endpoint de Siri y si el *Web Share Target* sirve para capturar conceptos.
