@@ -144,14 +144,22 @@ select cron.unschedule('compabook-ping');
 
 | # | Resultado | Fecha | Notas |
 |---|---|---|---|
-| C1 | | | |
-| C2 | | | |
-| C3 | | | |
-| C4 | | | |
-| C5 | | | |
-| C6 | | | |
+| C1 | ✅ `401` sin cabecera | 2026-10-23 | Comprobado por Claude con `curl`; confirma que `INTERNAL_SECRET` existe en Vercel |
+| C2 | ✅ | 2026-10-23 | El primer intento dio 401: el secreto de Vault no coincidía con el de Vercel o no existía (no se llegó a distinguir; ver «Hallazgos»). Se rotó con `vault.update_secret` |
+| C3 | ✅ `schedule = 1` | 2026-10-23 | Tras activar `pg_cron` y `pg_net` |
+| C4 | ✅ `status_code = 200` | 2026-10-23 | Reportado por Emile. Las filas 11 y 12 quedaron con 401: son de antes de corregir el secreto y `net._http_response` no se reescribe |
+| C5 | ✅ | 2026-10-23 | Reportado por Emile como «todo bien»; sin detalle de las líneas |
+| C6 | Pendiente | | Decidir si se para la tarea o se deja unos días (ver notas) |
 
-**Conclusión:** _pendiente_
+### Hallazgos
+
+- **`pg_cron` y `pg_net` no vienen activadas** en el proyecto: la primera llamada a `cron.schedule` falló con `schema "cron" does not exist`. Hay que activarlas (Database → Extensions) antes de programar nada. Solo `supabase_vault` estaba instalada.
+- **El secreto debe ser idéntico en Vercel y en Vault**, sin comillas, espacios ni saltos de línea. Un valor distinto da `401` en `net._http_response`, el mismo síntoma que si falta el secreto en Vault. El arreglo fue generar un valor nuevo en SQL (`gen_random_uuid()` dos veces, 64 caracteres), ponerlo en Vercel, redesplegar y actualizar Vault.
+- `vault.update_secret` no devuelve nada (la celda sale vacía); `vault.create_secret` devuelve el id.
+- Ejecutar varias sentencias juntas en el SQL Editor de Supabase solo muestra el resultado de la última.
+- Al definitivo (`/internal/jobs`, `/reminders`, `/cleanup`) le valen el mismo esquema de secreto en cabecera y la misma tarea de `pg_cron`.
+
+**Conclusión (2026-10-23):** `pg_cron` llama cada minuto a la función de Vercel con `pg_net`, con el secreto guardado en Vault, y la llamada queda en `net._http_response` y en los registros de Vercel. La arquitectura del reloj es viable en el plan gratuito. Falta decidir qué hacer con la tarea (C6).
 
 Notas para decidir al terminar:
 - Dejar la tarea unos días activa también ayuda a responder el pendiente «¿Supabase gratis pausa el proyecto por inactividad aunque `pg_cron` esté activo?». Son unas 1.440 llamadas al día; conviene mirar *Usage* en Vercel y en Supabase para confirmar que caben en el plan.
