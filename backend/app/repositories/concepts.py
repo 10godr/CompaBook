@@ -1,4 +1,6 @@
 import uuid
+from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import datetime
 
 from sqlalchemy import and_, delete, or_, select, update
@@ -6,7 +8,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import joinedload
 
-from app.models import Concept, ConceptCard, ProcessingJob
+from app.models import Concept, ConceptAlias, ConceptCard, ProcessingJob, VideoCache
 
 
 def _like_pattern(text: str) -> str:
@@ -185,6 +187,7 @@ class ConceptCardRepository:
         example_code_language: str | None,
         model: str,
         now: datetime,
+        youtube_search_query: str | None = None,
     ) -> tuple[ConceptCard, bool]:
         """Guarda la ficha, o devuelve la que ya existía para ese (cache_slug, language).
 
@@ -203,6 +206,7 @@ class ConceptCardRepository:
                 example_code=example_code,
                 example_code_language=example_code_language,
                 model=model,
+                youtube_search_query=youtube_search_query,
                 created_at=now,
             )
             .on_conflict_do_nothing(constraint="concept_cards_slug_language_key")
@@ -211,3 +215,98 @@ class ConceptCardRepository:
         card = self.get_by_slug(cache_slug, language)
         assert card is not None  # o la acabamos de crear o ya existía
         return card, inserted is not None
+
+
+class ConceptAliasRepository:
+    """Alias de conceptos: compartidos entre usuarios, por eso no llevan `user_id`.
+
+    Un alias es un texto ya visto («integracion continua») que lleva a una ficha existente. No
+    guarda quién lo escribió.
+    """
+
+    def __init__(self, db: DbSession) -> None:
+        self.db = db
+
+    def get_card(self, language: str, alias: str) -> ConceptCard | None:
+        """La ficha a la que lleva el alias, o None si ese texto no se había visto."""
+        return self.db.scalar(
+            select(ConceptCard)
+            .join(
+                ConceptAlias,
+                and_(
+                    ConceptAlias.cache_slug == ConceptCard.cache_slug,
+                    ConceptAlias.language == ConceptCard.language,
+                ),
+            )
+            .where(ConceptAlias.language == language, ConceptAlias.alias == alias)
+        )
+
+    def add_if_absent(self, language: str, alias: str, cache_slug: str, now: datetime) -> bool:
+        """Guarda el alias. Si ya existía (lo guardó otro antes) no lo toca: gana el primero.
+
+        Devuelve si fue esta llamada quien lo creó. La ficha (`cache_slug`, `language`) tiene que
+        existir ya.
+        """
+        created = self.db.execute(
+            pg_insert(ConceptAlias)
+            .values(language=language, alias=alias, cache_slug=cache_slug, created_at=now)
+            .on_conflict_do_nothing(index_elements=["language", "alias"])
+            .returning(ConceptAlias.alias)
+        ).scalar_one_or_none()
+        return created is not None
+
+
+@dataclass(frozen=True)
+class NewVideo:
+    """Un video listo para guardar en la caché."""
+
+    youtube_id: str
+    title: str
+    channel: str | None
+    thumbnail_url: str
+
+
+class VideoCacheRepository:
+    """Videos de un concepto, compartidos entre usuarios por (cache_slug, language)."""
+
+    def __init__(self, db: DbSession) -> None:
+        self.db = db
+
+    def get(self, cache_slug: str, language: str) -> list[VideoCache]:
+        """Los videos guardados, en su orden (el 1 primero). Vacío si aún no se buscaron."""
+        return list(
+            self.db.scalars(
+                select(VideoCache)
+                .where(VideoCache.cache_slug == cache_slug, VideoCache.language == language)
+                .order_by(VideoCache.position)
+            )
+        )
+
+    def save_if_absent(
+        self, cache_slug: str, language: str, videos: Sequence[NewVideo], now: datetime
+    ) -> None:
+        """Guarda hasta 2 videos. Si ya había (los buscó otro a la vez), se queda lo primero.
+
+        Se insertan todos en una sola sentencia y por orden de posición: dos búsquedas simultáneas
+        no pueden quedarse cada una con un video distinto.
+        """
+        rows = [
+            {
+                "cache_slug": cache_slug,
+                "language": language,
+                "position": position,
+                "youtube_id": video.youtube_id,
+                "title": video.title,
+                "channel": video.channel,
+                "thumbnail_url": video.thumbnail_url,
+                "fetched_at": now,
+            }
+            for position, video in enumerate(videos[:2], start=1)
+        ]
+        if not rows:
+            return
+        self.db.execute(
+            pg_insert(VideoCache)
+            .values(rows)
+            .on_conflict_do_nothing(constraint="video_cache_slug_language_position_key")
+        )
