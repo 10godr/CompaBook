@@ -27,7 +27,10 @@ class ConsoleEmailProvider:
     """Solo para desarrollo local: escribe el correo, con su código, en la salida estándar."""
 
     def send(self, message: EmailMessage) -> None:
-        print(f"\n--- Correo para {message.to} ---\n{message.subject}\n\n{message.body}\n---")
+        print(
+            f"\n--- Correo para {message.to} ---\n{message.subject}\n\n{message.body}\n---",
+            flush=True,
+        )
 
 
 class GmailSmtpProvider:
@@ -86,6 +89,28 @@ def verification_email(to: str, code: str, language: str) -> EmailMessage:
         body=(
             f"Tu código de verificación de CompaBook es: {code}\n\n"
             "Caduca en 15 minutos. Si no lo pediste, puedes ignorar este correo.\n"
+        ),
+    )
+
+
+def reset_password_email(to: str, code: str, language: str) -> EmailMessage:
+    if language == "en":
+        return EmailMessage(
+            to=to,
+            subject="Reset your CompaBook password",
+            body=(
+                f"Your CompaBook password reset code is: {code}\n\n"
+                "It expires in 15 minutes. If you didn't ask for it, ignore this email: "
+                "your password won't change.\n"
+            ),
+        )
+    return EmailMessage(
+        to=to,
+        subject="Restablece tu contraseña de CompaBook",
+        body=(
+            f"Tu código para restablecer la contraseña de CompaBook es: {code}\n\n"
+            "Caduca en 15 minutos. Si no lo pediste, ignora este correo: "
+            "tu contraseña no cambiará.\n"
         ),
     )
 

@@ -1,99 +1,25 @@
 import logging
 import re
-from collections.abc import Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import text
 from sqlalchemy.orm import Session as DbSession
 
-from app.config import get_settings
-from app.db import get_db
-from app.main import app
-from app.models import AllowedEmail, EmailCode, User
-from app.services import accounts
-from app.services.email import EmailMessage, get_email_provider
-
-HEADERS = {"X-Requested-With": "compabook"}
-NOW = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
-PASSWORD = "caballo-grapa-azul"
-
-
-class FakeEmailProvider:
-    def __init__(self) -> None:
-        self.sent: list[EmailMessage] = []
-        self.fail = False
-
-    def send(self, message: EmailMessage) -> None:
-        if self.fail:
-            raise RuntimeError("SMTP caído")
-        self.sent.append(message)
-
-    def last_code(self) -> str:
-        match = re.search(r"\b(\d{6})\b", self.sent[-1].body)
-        assert match, "el correo no lleva código"
-        return match.group(1)
-
-
-@pytest.fixture
-def mailer() -> FakeEmailProvider:
-    return FakeEmailProvider()
-
-
-@pytest.fixture
-def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
-    state = {"now": NOW}
-    monkeypatch.setattr(accounts, "utcnow", lambda: state["now"])
-    return state
-
-
-@pytest.fixture
-def client(
-    orm: DbSession,
-    mailer: FakeEmailProvider,
-    clock: dict[str, datetime],
-    monkeypatch: pytest.MonkeyPatch,
-) -> Iterator[TestClient]:
-    monkeypatch.setattr(get_settings(), "secret_key", "clave-de-prueba")
-    monkeypatch.setattr(get_settings(), "cookie_secure", True)
-    app.dependency_overrides[get_db] = lambda: orm
-    app.dependency_overrides[get_email_provider] = lambda: mailer
-    yield TestClient(app)
-    app.dependency_overrides.clear()
-
-
-def invite(orm: DbSession, email: str = "ana@example.com") -> None:
-    orm.add(AllowedEmail(email=email))
-    orm.flush()
-
-
-def body(**override: object) -> dict[str, object]:
-    data: dict[str, object] = {
-        "email": "ana@example.com",
-        "password": PASSWORD,
-        "language": "es",
-        "timezone": "America/Santo_Domingo",
-        "accept_terms": True,
-    }
-    return {**data, **override}
-
-
-def register(client: TestClient, ip: str = "1.1.1.1", **override: object):
-    return client.post(
-        "/api/v1/auth/register", json=body(**override), headers={**HEADERS, "x-forwarded-for": ip}
-    )
-
-
-def verify(client: TestClient, code: str, email: str = "ana@example.com"):
-    return client.post(
-        "/api/v1/auth/verify-email", json={"email": email, "code": code}, headers=HEADERS
-    )
-
-
-def find_user(orm: DbSession, email: str = "ana@example.com") -> User | None:
-    return orm.query(User).filter(User.email == email).one_or_none()
-
+from app.models import EmailCode, User
+from tests.helpers import (
+    HEADERS,
+    NOW,
+    PASSWORD,
+    FakeEmailProvider,
+    body,
+    find_user,
+    invite,
+    register,
+    resend,
+    verify,
+)
 
 # --- Registro por invitación ---
 
@@ -379,10 +305,6 @@ def test_formato_del_codigo(client: TestClient) -> None:
 
 
 # --- Reenviar código ---
-
-
-def resend(client: TestClient, email: str = "ana@example.com"):
-    return client.post("/api/v1/auth/resend-code", json={"email": email}, headers=HEADERS)
 
 
 def test_reenviar_manda_un_codigo_nuevo(
