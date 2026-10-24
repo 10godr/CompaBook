@@ -93,7 +93,7 @@ Los límites se guardan en `rate_limit_events` (§3): cada intento añade una fi
 
 | Acción | Clave | Límite |
 |---|---|---|
-| Login fallido | email + IP | 5 en 15 min → se responde `429` con `retry_after`; la espera se duplica en cada bloqueo siguiente (máx. 1 h) |
+| Login fallido | email + IP | 5 fallos en 15 min abren una espera de 15 min (`429` con `retry_after`, incluso con la contraseña buena); la espera se duplica en cada bloqueo siguiente (30 min, y 1 h como máximo). Los bloqueos se olvidan tras 24 h sin ninguno, o al entrar bien. Los intentos bloqueados no alargan la espera |
 | Login (cualquier resultado) | IP | 30 por hora |
 | Registro | IP | 10 por hora |
 | Envío de códigos | email | 5 por hora |
@@ -200,7 +200,7 @@ email_codes (
 
 rate_limit_events (
   id         bigint generated always as identity pk,
-  bucket     text not null,          -- login_fail | login_ip | register_ip | email_send | concept_create | retry | siri
+  bucket     text not null,          -- login_fail | login_lock | login_ip | register_ip | email_send | concept_create | retry | siri
   key        text not null,          -- email+ip, ip, email, user_id o token_id según el bucket
   created_at timestamptz not null default now()
 )
@@ -464,11 +464,11 @@ Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_
 | `POST` | `/auth/register` | `{ email, password, language, timezone, accept_terms }` → 202 si el correo está permitido; 403 `registration_not_allowed` si no |
 | `POST` | `/auth/verify-email` | `{ email, code }` → 200 con `{ user }` y la cookie `cb_session`; 400 `invalid_code` para cualquier fallo (código malo, caducado, agotado, correo desconocido o cuenta suspendida) |
 | `POST` | `/auth/resend-code` | `{ email, purpose, language? }` → siempre 202; 429 al pasar de 5 envíos por hora y correo (cuenta igual si la cuenta no existe) |
-| `POST` | `/auth/login` | `{ email, password }` → cookie |
+| `POST` | `/auth/login` | `{ email, password }` → 200 con `{ user }` y la cookie; 401 `invalid_credentials` (contraseña mala, correo desconocido o cuenta suspendida, todo igual); 403 `email_not_verified` solo si la contraseña era correcta; 429 con `retry_after` |
 | `POST` | `/auth/logout` | Cierra la sesión actual |
-| `POST` | `/auth/forgot-password` | `{ email }` → siempre 200 |
-| `POST` | `/auth/reset-password` | `{ email, code, new_password }` |
-| `GET` | `/me` | Usuario actual + uso del día (`concepts_today`, `daily_limit`) |
+| `POST` | `/auth/forgot-password` | `{ email, language? }` → siempre 200; solo envía el código a cuentas verificadas y no suspendidas; 429 al pasar de 5 envíos por hora y correo |
+| `POST` | `/auth/reset-password` | `{ email, code, new_password }` → 200 y cierra **todas** las sesiones; 400 `invalid_code`; 422 `weak_password` (se comprueba antes de gastar un intento del código) |
+| `GET` | `/me` | Usuario actual (`email`, `language`, `timezone`); más adelante, el uso del día (`concepts_today`, `daily_limit`). 401 `unauthorized` sin sesión vigente. Renueva la sesión y reenvía la cookie si pasaron 24 h desde el último uso |
 | `PATCH` | `/me` | `{ language?, timezone? }` |
 | `POST` | `/me/change-password` | `{ current_password, new_password }` |
 | `DELETE` | `/me` | `{ password }` → elimina cuenta y datos |

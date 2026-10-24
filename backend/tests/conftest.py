@@ -1,11 +1,17 @@
 from collections.abc import Iterator
+from datetime import datetime
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import Connection
 from sqlalchemy.orm import Session as DbSession
 
 from app.config import get_settings
-from app.db import get_engine
+from app.db import get_db, get_engine
+from app.main import app
+from app.services import accounts
+from app.services.email import get_email_provider
+from tests.helpers import NOW, FakeEmailProvider
 
 
 @pytest.fixture
@@ -27,3 +33,32 @@ def orm(db: Connection) -> Iterator[DbSession]:
     """Sesión del ORM sobre la misma conexión, para probar repositorios."""
     with DbSession(bind=db, join_transaction_mode="create_savepoint") as session:
         yield session
+
+
+@pytest.fixture
+def mailer() -> FakeEmailProvider:
+    return FakeEmailProvider()
+
+
+@pytest.fixture
+def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
+    """Reloj controlable: `clock["now"] = ...` adelanta o atrasa el tiempo de los servicios."""
+    state = {"now": NOW}
+    monkeypatch.setattr(accounts, "utcnow", lambda: state["now"])
+    return state
+
+
+@pytest.fixture
+def client(
+    orm: DbSession,
+    mailer: FakeEmailProvider,
+    clock: dict[str, datetime],
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[TestClient]:
+    """Cliente de la API con la base de datos de pruebas y un correo falso."""
+    monkeypatch.setattr(get_settings(), "secret_key", "clave-de-prueba")
+    monkeypatch.setattr(get_settings(), "cookie_secure", True)
+    app.dependency_overrides[get_db] = lambda: orm
+    app.dependency_overrides[get_email_provider] = lambda: mailer
+    yield TestClient(app)
+    app.dependency_overrides.clear()
