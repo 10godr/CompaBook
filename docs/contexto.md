@@ -209,7 +209,7 @@ Estados: `pending` → `processing` → `completed` | `failed`.
 1. Con la PWA instalada (en iPhone, Web Push requiere iOS 16.4+ y la app en la pantalla de inicio), el usuario activa las notificaciones **con un botón**.
 2. Elige **hora** y **días de la semana**; la zona horaria se toma del dispositivo.
 3. El reloj envía la notificación cuando toca (con hasta 2 horas de margen si hubo una caída), p. ej.: «Tienes 12 conceptos en tu Cuaderno — repasa "CI/CD"» (uno al azar).
-4. Si el Cuaderno está vacío no se envía nada. Tocarla abre el concepto sugerido.
+4. Si el Cuaderno está vacío no se envía nada. Tocarla abre el concepto sugerido (`/cuaderno/:id`).
 
 ### 5.4 Atajo de Siri
 
@@ -220,7 +220,7 @@ Estados: `pending` → `processing` → `completed` | `failed`.
 
 ### 5.5 Límite diario
 
-- Cada usuario puede crear hasta **30 conceptos** y pedir **10 reintentos** al día (valores configurables).
+- Cada usuario puede crear hasta **30 conceptos** y pedir **10 reintentos** al día (valores configurables). El «día» es el **día local del usuario** (según su zona horaria): el cupo se renueva a su medianoche, no cada 24 horas.
 - Eliminar conceptos no devuelve cupo.
 - Al alcanzarlo, la app y Siri responden con un mensaje claro en el idioma del usuario: «Has llegado al límite de hoy; vuelve mañana».
 
@@ -318,8 +318,8 @@ Diseño visual: [`design.md`](design.md). Base oscura inspirada en Morphic, adap
 | 3. Aprobación | Revisión del equipo | ✅ (PR #1, 2026-10-22) |
 | 4. Fundamentos y prueba de riesgos | Estructura, CI, Docker local, FastAPI, SQLAlchemy + Alembic, frontend base con i18n y tema, despliegue en Vercel. **Prueba de concepto** de lo que puede tumbar la arquitectura: FastAPI bajo `/api` en Vercel, cookie en Safari con la PWA instalada, push al iPhone y `pg_cron` → `pg_net` → Vercel | 🟡 Hecha; falta el cierre a partir del 2026-10-30 (prueba H de la cookie, parar `pg_cron` de prueba, retirar el código temporal) |
 | 5. Cuentas | Registro solo por correos permitidos, verificación por código, login, recuperación, idioma, eliminar cuenta, suspensión de cuentas, límites de intentos | ✅ (PR #18 a #23, 2026-10-23). Ver `docs/cierre-fase-5.md` |
-| 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento, búsqueda y eliminación, límite diario | |
-| 6b. Cola, videos y fichas compartidas | Cola de respaldo, videos con caché, alias y reutilización de fichas, panel de carga, reintentar | |
+| 6a. Cuaderno + ficha | Crear concepto, ficha con Gemini al momento (sin videos), tablas `concepts`, `concept_cards` y `processing_jobs`, panel de carga por etapas, **Reintentar** manual, búsqueda y eliminación, límite diario | |
+| 6b. Cola, videos y fichas compartidas | Reloj de respaldo (`/internal/jobs`) con reintentos automáticos, videos con caché, alias y reutilización de fichas | |
 | 7. Recordatorios | Ajustes de hora y días, push, envío desde el reloj. Pruebas en iPhone y en Android | |
 | 8. Siri | Tokens personales, endpoint y guía del atajo | |
 | 9. Legal y publicación | Textos legales es/en, pruebas en Windows e iPhone, despliegue | |
