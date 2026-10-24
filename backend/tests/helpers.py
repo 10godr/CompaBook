@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session as DbSession
 
 from app.models import AllowedEmail, User
+from app.services.ai import AIError, CardContent, GeneratedCard, normalize_slug
 from app.services.email import EmailMessage
 
 HEADERS = {"X-Requested-With": "compabook"}
@@ -29,6 +30,33 @@ class FakeEmailProvider:
         match = re.search(r"\b(\d{6})\b", self.sent[-1].body)
         assert match, "el correo no lleva código"
         return match.group(1)
+
+
+def make_content(title: str = "CI/CD", **override: object) -> CardContent:
+    """Una ficha válida de ejemplo; el `cache_slug` sale del título."""
+    values = {
+        "canonical_title": title,
+        "cache_slug": normalize_slug(title),
+        "what_is": "Qué es.",
+        "what_for": "Para qué sirve.",
+        "example": "Un ejemplo.",
+    }
+    return CardContent(**{**values, **override})
+
+
+class FakeAIProvider:
+    """IA falsa: cuenta las llamadas y devuelve una ficha fija o lanza el error que se le pida."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []  # (título, idioma) de cada llamada
+        self.error: AIError | None = None
+        self.cards: dict[str, CardContent] = {}  # ficha a devolver para un título concreto
+
+    def generate_card(self, title: str, language: str) -> GeneratedCard:
+        self.calls.append((title, language))
+        if self.error:
+            raise self.error
+        return GeneratedCard(self.cards.get(title) or make_content(title), "modelo-falso")
 
 
 def invite(orm: DbSession, email: str = EMAIL) -> None:

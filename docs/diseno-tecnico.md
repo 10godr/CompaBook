@@ -26,6 +26,11 @@ Verificado en la documentación oficial (pricing actualizado el 2026-10-15). Los
 
 Salida estructurada (`response_mime_type: application/json` + `response_schema`) y validación con Pydantic antes de guardar.
 
+Se llama por **REST con `httpx`** (`POST .../models/{modelo}:generateContent`), no con el SDK de Google: es más ligero en Vercel, más fácil de simular en los tests y deja controlar los tiempos de espera. La clave va en la cabecera `x-goog-api-key`, nunca en la URL.
+
+- Espera máxima de `AI_TIMEOUT_SECONDS` (25 s) por llamada. Si el principal da 429, está caído, tarda de más o contesta algo inservible, se prueba **una vez** el de respaldo; el peor caso es el doble de espera.
+- Errores (`AIError.kind`): `busy` (429, cuota), `unavailable` (5xx, tiempo agotado o sin red), `invalid_response` (no es JSON, falta un campo o quedó a medias), `rejected` (400/401/403/404 o contenido bloqueado) y `not_configured` (sin `GEMINI_API_KEY`). El error solo lleva ese tipo: nunca el concepto, la respuesta ni la clave. Los logs solo registran modelo, resultado, código y milisegundos.
+
 ### 1.3 YouTube Data API v3
 
 - Cupo gratuito: **10.000 unidades/día** para todo el proyecto; `search.list` cuesta 100 → **~100 búsquedas/día en total**.
@@ -427,6 +432,8 @@ Con esta lógica, si una ejecución se retrasa o falla, la siguiente envía el r
 - `cache_slug` es la clave de la caché de videos: **siempre en inglés, minúsculas, palabras separadas por guiones, sin paréntesis ni siglas expandidas**. Variantes como «ci cd», «CI/CD» o «integración continua» deben dar el mismo `ci-cd`. El backend lo vuelve a normalizar (minúsculas, `[a-z0-9-]`, máximo 60 caracteres) antes de usarlo.
 - `youtube_search_query` va en el idioma del usuario.
 
+**Validación (Pydantic, antes de guardar).** `canonical_title` de 1 a 120 caracteres; `what_is`, `what_for` y `example` de 1 a 1500; `example_code` de hasta 2000; `cache_slug` normalizado (y rechazada la ficha si queda vacío). Los **enlaces** (`http://`, `https://`, `www.`) se rechazan en los textos, porque los videos vienen de YouTube y no de la IA, pero valen dentro de `example_code`. Las **etiquetas HTML no se rechazan**: conceptos como HTML o React las usan al explicarse, y la web siempre las muestra como texto. Un `example_code_language` raro se descarta sin tirar la ficha. En la Fase 6a el esquema aún no pide `youtube_search_query`; llega con los videos en la 6b.
+
 ### 5.3 Mostrar la ficha
 
 - Todo se pinta como **texto** con React (sin `dangerouslySetInnerHTML`). Los saltos de línea se respetan con CSS.
@@ -552,6 +559,7 @@ SESSION_DAYS=30
 GEMINI_API_KEY=
 GEMINI_MODEL=gemini-3.8-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
+AI_TIMEOUT_SECONDS=25               # espera máxima por llamada a Gemini
 YOUTUBE_API_KEY=
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
