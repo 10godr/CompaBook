@@ -320,3 +320,70 @@ def test_la_ficha_no_tiene_ninguna_columna_de_usuario() -> None:
     """Una ficha compartida no puede llevar datos de nadie (contexto.md §10.12)."""
     columns = set(ConceptCard.__table__.columns.keys())
     assert not columns & {"user_id", "title", "email", "concept_id"}
+
+
+# --- Trabajos ------------------------------------------------------------------------------
+
+
+def job_of(orm: DbSession, concept: Concept) -> ProcessingJob:
+    orm.expire_all()
+    return orm.scalar(select(ProcessingJob).where(ProcessingJob.concept_id == concept.id))
+
+
+def test_reclamar_el_trabajo_lo_deja_en_processing_y_solo_una_vez(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    repository = ConceptRepository(orm, ana.id)
+    assert repository.claim_job(concept.id, NOW) is True
+    job = job_of(orm, concept)
+    assert (job.status, job.stage, job.locked_at) == ("processing", "writing", NOW)
+    assert repository.claim_job(concept.id, NOW) is False  # ya no está pendiente
+
+
+def test_un_usuario_no_puede_tocar_el_trabajo_de_otro(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, beto = two_users
+    concept = add_concept(orm, ana, "Docker")
+    other = ConceptRepository(orm, beto.id)
+    assert other.claim_job(concept.id, NOW) is False
+    other.fail_job(concept.id, "busy", NOW)
+    assert job_of(orm, concept).status == "pending"
+    other.complete_job(concept.id, NOW)
+    assert job_of(orm, concept).status == "pending"
+    # Para probar `reset_job` el trabajo tiene que estar en otro estado: lo toma su dueña.
+    ConceptRepository(orm, ana.id).claim_job(concept.id, NOW)
+    other.reset_job(concept.id, NOW)
+    job = job_of(orm, concept)
+    assert (job.status, job.attempts, job.last_error) == ("processing", 0, None)
+
+
+def test_un_usuario_no_puede_poner_ficha_a_un_concepto_de_otro(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, beto = two_users
+    concept = add_concept(orm, ana, "Docker")
+    card, _ = ConceptCardRepository(orm).insert_if_absent(**card_values())
+    ConceptRepository(orm, beto.id).attach_card(concept.id, card.id)
+    orm.refresh(concept)
+    assert concept.card_id is None
+    ConceptRepository(orm, ana.id).attach_card(concept.id, card.id)
+    orm.refresh(concept)
+    assert concept.card_id == card.id
+
+
+def test_fallar_suma_un_intento_y_guarda_solo_el_tipo_de_error(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    repository = ConceptRepository(orm, ana.id)
+    repository.claim_job(concept.id, NOW)
+    repository.fail_job(concept.id, "busy", NOW)
+    job = job_of(orm, concept)
+    assert (job.status, job.attempts, job.last_error, job.locked_at) == ("failed", 1, "busy", None)
+    repository.reset_job(concept.id, NOW)
+    job = job_of(orm, concept)
+    assert (job.status, job.stage, job.attempts, job.locked_at) == ("pending", "queued", 0, None)

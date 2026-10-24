@@ -21,8 +21,10 @@ Verificado en la documentación oficial (pricing actualizado el 2026-10-15). Los
 
 | Uso | Modelo | Variable |
 |---|---|---|
-| Principal | `gemini-3.8-flash` | `GEMINI_MODEL` |
+| Principal | `gemini-3.5-flash` | `GEMINI_MODEL` |
 | Respaldo (429 / cupo agotado) | `gemini-3.5-flash-lite` | `GEMINI_FALLBACK_MODEL` |
+
+**Por qué no `gemini-3.8-flash`.** En la prueba con la API real (2026-10-24) los modelos más nuevos (`3.6`, `3.7` y `3.8`) daban 503 «high demand» o no contestaban ni en 60 s, y su cupo gratuito es corto (`3.6` y `3.8`: **5 RPM y 20 RPD**, según AI Studio; el de `3.5-flash` aún no aparecía listado, anotarlo cuando salga). `gemini-3.5-flash` contestó en unos 10 s y, con «CI/CD» e «integración continua», dio el mismo `cache_slug`; `gemini-3.5-flash-lite` contestó en 5–10 s pero con slugs distintos. Cuando el principal agote su cupo diario o dé 429, el respaldo atiende el resto: **15 RPM y 500 RPD**. Volver a probar `3.8` cuando baje la demanda; cambiarlo es solo la variable de entorno.
 
 Salida estructurada (`response_mime_type: application/json` + `response_schema`) y validación con Pydantic antes de guardar.
 
@@ -483,7 +485,7 @@ Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_
 | `POST` | `/auth/logout` | Cierra la sesión actual |
 | `POST` | `/auth/forgot-password` | `{ email, language? }` → siempre 200; solo envía el código a cuentas verificadas y no suspendidas; 429 al pasar de 5 envíos por hora y correo |
 | `POST` | `/auth/reset-password` | `{ email, code, new_password }` → 200 y cierra **todas** las sesiones; 400 `invalid_code`; 422 `weak_password` (se comprueba antes de gastar un intento del código) |
-| `GET` | `/me` | Usuario actual (`email`, `language`, `timezone`); más adelante, el uso del día (`concepts_today`, `daily_limit`). 401 `unauthorized` sin sesión vigente. Renueva la sesión y reenvía la cookie si pasaron 24 h desde el último uso |
+| `GET` | `/me` | `{ user: { email, language, timezone }, usage: { concepts_today, daily_limit } }`; el uso cuenta desde la medianoche local del usuario. 401 `unauthorized` sin sesión vigente. Renueva la sesión y reenvía la cookie si pasaron 24 h desde el último uso |
 | `PATCH` | `/me` | `{ language?, timezone? }` → 200 con `{ user }`; 422 si no hay nada que cambiar, el idioma no es `es`/`en` o la zona horaria no existe |
 | `POST` | `/me/change-password` | `{ current_password, new_password }` → 200 y cierra **las demás** sesiones (la actual sigue); 400 `wrong_password`; 422 `weak_password`; 429 |
 | `DELETE` | `/me` | `{ password }` → 200, elimina la cuenta y, en cascada, sus datos, y borra la cookie; 400 `wrong_password`; 429. No toca `allowed_emails`: la invitación es del administrador |
@@ -494,13 +496,15 @@ Comprobar la contraseña actual (cambiarla o eliminar la cuenta) tiene un límit
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/concepts` | `{ title }` (1–200 caracteres) → 201 con `id` y `status`; 429 `daily_limit_reached` |
-| `POST` | `/concepts/{id}/process` | Genera la ficha al momento → 200 con el estado final, o 202 si ya la procesa otro |
-| `GET` | `/concepts` | `q`, `limit`, `cursor`; orden por fecha descendente |
-| `GET` | `/concepts/{id}` | Concepto + ficha + videos + estado |
+| `POST` | `/concepts` | `{ title }` (1–200 caracteres, sin espacios a los lados) → 201 `{ id, status }`; 422 `validation_error`; 429 `daily_limit_reached` (con `limit` y `retry_after` hasta la medianoche local). El concepto nace en el idioma del usuario |
+| `POST` | `/concepts/{id}/process` | Genera la ficha al momento → 200 `{ status, stage, attempts }` con el estado final (`completed`, o `failed` si la IA falló), o 202 con el estado actual si ya la procesa otro. Si ya estaba resuelto, 200 sin llamar a la IA |
+| `GET` | `/concepts` | `q` (hasta 200), `limit` (1–50, por defecto 20), `cursor` (opaco, el `next_cursor` anterior) → `{ items, next_cursor }` por fecha descendente; cada item lleva `id`, `title`, `language`, `created_at`, `card_title` (nulo sin ficha), `status`, `stage`, `attempts`. Cursor o `limit` inválidos: 422 |
+| `GET` | `/concepts/{id}` | Lo mismo que un item, más `source`, `card` (`canonical_title`, `what_is`, `what_for`, `example`, `example_code`, `example_code_language`; nulo sin ficha) y `videos` (`[]` hasta la 6b) |
 | `GET` | `/concepts/{id}/status` | `{ status, stage, attempts }` para el polling |
-| `POST` | `/concepts/{id}/retry` | Solo si `failed` → 202; 429 `daily_limit_reached` |
-| `DELETE` | `/concepts/{id}` | Eliminar |
+| `POST` | `/concepts/{id}/retry` | Solo si `failed` (o `processing` abandonado) → 202 con el nuevo estado `pending`; 409 `not_retryable` si no; 429 `daily_limit_reached` |
+| `DELETE` | `/concepts/{id}` | → 200 `{ ok: true }`. Borra el concepto y su trabajo; la ficha compartida se queda. No devuelve el cupo del día |
+
+Un concepto o trabajo ajeno responde 404 `not_found` en todos estos endpoints, igual que uno inexistente. Todos los `POST` y `DELETE` exigen `X-Requested-With: compabook`.
 
 ### Recordatorios y notificaciones
 
@@ -557,7 +561,7 @@ COOKIE_SECURE=false
 SECRET_KEY=                         # clave del servidor para los códigos por correo (HMAC); larga y aleatoria
 SESSION_DAYS=30
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-3.8-flash
+GEMINI_MODEL=gemini-3.5-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 AI_TIMEOUT_SECONDS=25               # espera máxima por llamada a Gemini
 YOUTUBE_API_KEY=
@@ -685,7 +689,7 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 
 ## 12. Pendientes
 
-- [ ] Anotar los límites reales de Gemini al crear la clave y ajustar `DAILY_CONCEPT_LIMIT`.
-- [ ] Confirmar el tiempo máximo de función en Vercel Hobby en el primer despliegue y ajustar `JOBS_MAX_PER_RUN`.
+- [ ] Anotar los límites reales de Gemini al crear la clave y ajustar `DAILY_CONCEPT_LIMIT`. Vistos el 2026-10-24: `3.5-flash-lite` 15 RPM / 500 RPD, `3.1-flash-lite` 15 RPM / 500 RPD, `3.6` y `3.8` 5 RPM / 20 RPD. Con 30 conceptos por usuario y día y pocos usuarios invitados, el respaldo (500 RPD) cubre el uso; falta ver el cupo de `3.5-flash`.
+- [ ] Confirmar el tiempo máximo de función en Vercel Hobby en el primer despliegue y ajustar `JOBS_MAX_PER_RUN`. Desde la 6a, `vercel.json` fija `maxDuration: 60` para `api/index.py` (el peor caso de `/process` son dos llamadas a Gemini de 25 s); si el despliegue lo rechazara, plan B: `/process` responde 202 y lo termina el reloj.
 - [ ] Verificar la pausa por inactividad y las copias de seguridad del plan gratuito de Supabase.
 - [ ] Después de la Fase 8: probar si una app de atajos de Android puede llamar al endpoint de Siri y si el *Web Share Target* sirve para capturar conceptos.
