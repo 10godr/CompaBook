@@ -52,6 +52,7 @@ Salida estructurada (`response_mime_type: application/json` + `response_schema`)
 
 - Claves **VAPID**; la pública va al frontend y la privada solo al backend.
 - Envío con `pywebpush`. Si un envío devuelve 404/410, la suscripción se marca inactiva.
+- Funciona en iPhone (PWA instalada, iOS 16.4+) y en Android (Chrome); ambos se probaron con el mismo código de envío.
 
 ---
 
@@ -70,14 +71,14 @@ Funcionamiento:
 1. Al iniciar sesión se genera un token aleatorio (`secrets.token_urlsafe(32)`).
 2. En la base de datos se guarda **su hash SHA-256**, no el token.
 3. El token va al navegador en la cookie `cb_session`: `HttpOnly`, `Secure`, `SameSite=Lax`, `Path=/`, 30 días.
-4. En cada petición se hashea la cookie y se busca la sesión vigente.
+4. En cada petición se hashea la cookie y se busca la sesión vigente de un usuario con `disabled_at` nulo: suspender una cuenta corta el acceso al instante.
 5. **Renovación deslizante:** si `last_used_at` tiene más de 24 h, se actualiza y `expires_at` pasa a ahora + 30 días (y se reenvía la cookie). Quien usa la app no tiene que volver a entrar; una sesión sin uso caduca a los 30 días.
 
 ### 2.2 Contraseñas
 
 - **argon2id** con `pwdlib`.
 - Mínimo 8 caracteres y máximo 128; se rechazan contraseñas muy comunes.
-- El login responde igual si el email no existe o la contraseña es incorrecta (no revela qué cuentas existen).
+- El login responde igual si el email no existe, la contraseña es incorrecta o la cuenta está suspendida (no revela qué cuentas existen).
 
 ### 2.3 Códigos por email
 
@@ -107,9 +108,11 @@ Los límites se guardan en `rate_limit_events` (§3): cada intento añade una fi
 ### 2.5 Flujos
 
 **Registro**
-1. `POST /auth/register` `{ email, password, language, timezone, accept_terms }` → **siempre 202** con el mismo mensaje («Si el email es válido, te enviamos un código»).
-   - Email nuevo: crea usuario con `email_verified_at = null` y envía código.
-   - Email ya registrado: no cambia nada y envía un correo «Ya tienes una cuenta; ¿olvidaste tu contraseña?». Así el registro no revela qué emails existen.
+1. `POST /auth/register` `{ email, password, language, timezone, accept_terms }`.
+   - Email que **no está en `allowed_emails`**: `403 registration_not_allowed` con el mensaje «El registro es solo por invitación». Se acepta que esto revele qué correos están invitados: el grupo es pequeño y el límite de 10 registros por hora e IP frena el sondeo.
+   - Email permitido: **202** con el mismo mensaje («Si el email es válido, te enviamos un código») en los dos casos siguientes:
+     - Email nuevo: crea usuario con `email_verified_at = null` y envía código.
+     - Email ya registrado: no cambia nada y envía un correo «Ya tienes una cuenta; ¿olvidaste tu contraseña?». Así el registro no revela qué cuentas existen.
 2. `POST /auth/verify-email` `{ email, code }` → marca verificado e inicia sesión.
 3. Hasta verificar, no se puede iniciar sesión (se ofrece reenviar el código).
 4. Las cuentas sin verificar se borran a los 7 días (`/internal/cleanup`).
@@ -119,7 +122,36 @@ Los límites se guardan en `rate_limit_events` (§3): cada intento añade una fi
 2. `POST /auth/reset-password` `{ email, code, new_password }` → cambia la contraseña y **cierra todas las sesiones**.
 
 **Eliminar cuenta**
-- `DELETE /me` `{ password }` → borra el usuario y en cascada todos sus datos; borra la cookie.
+- `DELETE /me` `{ password }` → borra el usuario y en cascada todos sus datos; borra la cookie. Las fichas compartidas y los alias no llevan datos del usuario y se conservan.
+
+**Administración (sin panel)**
+
+Con pocos usuarios se hace con SQL en Supabase (SQL Editor). Cerrar el registro es no añadir correos. Quitar un correo de la lista **no** suspende una cuenta ya creada.
+
+```sql
+-- Invitar o quitar un correo
+insert into allowed_emails (email, note) values ('amigo@example.com', 'Diego');
+delete from allowed_emails where email = 'amigo@example.com';
+
+-- Suspender o reactivar una cuenta (sus sesiones dejan de valer al instante)
+update users set disabled_at = now() where email = 'amigo@example.com';
+update users set disabled_at = null where email = 'amigo@example.com';
+update api_tokens set revoked_at = now() where user_id = (select id from users where email = 'amigo@example.com');
+
+-- Cerrar una cuenta y borrar sus datos (en cascada)
+delete from users where email = 'amigo@example.com';
+```
+
+Para corregir una ficha compartida incorrecta (a verificar al implementarla): borrar la ficha y su alias, y volver a poner en cola los conceptos que la usaban.
+
+```sql
+begin;
+delete from concept_aliases where cache_slug = 'ci-cd' and language = 'es';
+delete from concept_cards   where cache_slug = 'ci-cd' and language = 'es';  -- concepts.card_id queda en nulo
+update processing_jobs set status = 'pending', stage = 'queued', attempts = 0, next_run_at = now()
+ where concept_id in (select id from concepts where card_id is null);
+commit;
+```
 
 ---
 
@@ -135,7 +167,14 @@ users (
   language          text not null check (language in ('es','en')),
   timezone          text not null,              -- p. ej. 'America/Santo_Domingo'
   email_verified_at timestamptz,
+  disabled_at       timestamptz,                -- cuenta suspendida por el administrador (§2.5)
   created_at, updated_at timestamptz
+)
+
+allowed_emails (                     -- registro por invitación; se gestiona con SQL
+  email      citext pk,
+  note       text,
+  created_at timestamptz default now()
 )
 
 sessions (
@@ -172,20 +211,31 @@ concepts (
   title         text not null check (char_length(title) between 1 and 200),  -- lo que escribió el usuario: «CI/CD»
   language      text not null,       -- idioma de la ficha (el del usuario al crearlo)
   source        text not null default 'app',   -- app | siri
+  card_id       uuid references concept_cards on delete set null,  -- nulo hasta que hay ficha
   created_at    timestamptz
 )
 
-concept_cards (                      -- una ficha por concepto
-  concept_id    uuid pk references concepts on delete cascade,
+concept_cards (                      -- COMPARTIDA entre usuarios: una ficha por (cache_slug, language)
+  id            uuid pk,
   canonical_title text not null,     -- nombre para mostrar que devuelve la IA
-  cache_slug    text not null,       -- clave estable para la caché de videos: 'ci-cd'
+  cache_slug    text not null,       -- clave estable de la ficha y de los videos: 'ci-cd'
+  language      text not null,
   what_is       text not null,
   what_for      text not null,
   example       text not null,
   example_code  text,
   example_code_language text,
   model         text not null,
-  created_at    timestamptz
+  created_at    timestamptz,
+  unique (cache_slug, language)
+)
+
+concept_aliases (                    -- «integración continua» → 'ci-cd'; sin usuario asociado
+  language     text not null,
+  alias        text not null check (char_length(alias) <= 60),  -- título normalizado (§5.5)
+  cache_slug   text not null,
+  created_at   timestamptz default now(),
+  primary key (language, alias)
 )
 
 video_cache (                        -- compartida entre usuarios
@@ -287,8 +337,13 @@ Separarlas evita que una llamada lenta a Gemini retrase los recordatorios o cort
 ### 4.3 Procesar un trabajo
 
 ```
-1. stage=writing         → solo si el concepto aún no tiene concept_card:
-                           Gemini (idioma del concepto) → valida → guarda concept_card
+1. stage=writing         → solo si el concepto aún no tiene ficha (card_id nulo):
+                           a) normaliza el título (§5.5) y busca en concept_aliases (idioma + alias)
+                              ├─ hay alias y ficha → asigna card_id: NO se llama a Gemini
+                              └─ no → Gemini (idioma del concepto) → valida → inserta la ficha con
+                                      ON CONFLICT (cache_slug, language) DO NOTHING (si otro usuario
+                                      la creó a la vez, se usa la existente) → inserta el alias
+                                      → asigna card_id
 2. stage=finding_videos  → video_cache por cache_slug + idioma
                              ├─ existe → reutiliza
                              └─ no     → YouTube → guarda en video_cache
@@ -375,6 +430,14 @@ Con esta lógica, si una ejecución se retrasa o falla, la siguiente envía el r
 - Cada una: miniatura (`thumbnail_url`) y debajo el título; el canal en gris.
 - Clic → `https://www.youtube.com/watch?v=<youtube_id>` en pestaña nueva (`target="_blank" rel="noopener"`).
 
+### 5.5 Normalizar el título (alias)
+
+Una función única del backend: minúsculas, quitar tildes (NFKD y eliminar las marcas), colapsar espacios y recortar. «Integración  Continua » → `integracion continua`; «CI/CD» → `ci/cd`. Si el resultado tiene más de 60 caracteres no se guarda alias (la ficha se genera igualmente y se comparte por su `cache_slug`). El alias no guarda al usuario.
+
+- Esta caché solo acierta con textos ya vistos: cada variante nueva gasta una llamada a Gemini la primera vez y desde entonces se reutiliza.
+- Crear un concepto sigue contando para `DAILY_CONCEPT_LIMIT` aunque la ficha ya exista: el límite también frena el abuso.
+- Se registra el acierto o fallo de la caché como contador, sin guardar el texto, para medir cuánta cuota se ahorra.
+
 ---
 
 ## 6. Idioma de la interfaz (i18n)
@@ -390,13 +453,13 @@ Con esta lógica, si una ejecución se retrasa o falla, la siguiente envía el r
 
 Base `/api/v1`. Autenticación por cookie `cb_session`, salvo donde se indica. Errores: `{ "error": { "code": "...", "message": "..." } }`.
 
-Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_found` (404, también para recursos de otro usuario), `rate_limited` (429, con `retry_after` en segundos), `daily_limit_reached` (429).
+Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_found` (404, también para recursos de otro usuario), `rate_limited` (429, con `retry_after` en segundos), `daily_limit_reached` (429), `registration_not_allowed` (403, correo no invitado).
 
 ### Cuenta
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/auth/register` | `{ email, password, language, timezone, accept_terms }` → siempre 202 |
+| `POST` | `/auth/register` | `{ email, password, language, timezone, accept_terms }` → 202 si el correo está permitido; 403 `registration_not_allowed` si no |
 | `POST` | `/auth/verify-email` | `{ email, code }` → inicia sesión |
 | `POST` | `/auth/resend-code` | `{ email, purpose }` → siempre 202 |
 | `POST` | `/auth/login` | `{ email, password }` → cookie |
@@ -519,6 +582,9 @@ Se ejecuta en cada PR y en cada push a `main`:
 
 - **Aislamiento:** con dos usuarios, cada endpoint de `/concepts`, `/reminders`, `/push` y `/tokens` devuelve 404 al pedir recursos del otro.
 - Registro, verificación, login, recuperación y límites de intentos.
+- Registro por invitación: un correo fuera de `allowed_emails` recibe 403 y no se crea usuario ni se envía código.
+- Cuenta suspendida (`disabled_at`): ya no puede iniciar sesión y su cookie deja de valer en la siguiente petición; sus tokens de Siri dejan de funcionar.
+- Fichas compartidas: dos usuarios que piden el mismo texto generan una sola ficha y una sola llamada a la IA; dos peticiones simultáneas de un concepto nuevo terminan con una ficha; la ficha compartida no expone el título, el usuario ni el correo de nadie.
 - Cola: reclamar un trabajo dos veces solo lo procesa una; reintentar no vuelve a llamar a Gemini si ya hay ficha.
 - Recordatorios: día no elegido, fuera de la ventana, ya enviado hoy y Cuaderno vacío no envían.
 - Gemini, YouTube, SMTP y Push se sustituyen por implementaciones falsas (`FakeAIProvider`, etc.).
@@ -537,9 +603,9 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 
 - **Marco:** República Dominicana, **Ley 172-13** de protección de datos personales.
 - **Responsable y contacto:** el Gmail del proyecto.
-- **Privacidad:** datos recogidos (email, idioma, zona horaria, conceptos, suscripciones push, IP para limitar intentos durante 2 días); finalidad; proveedores (Supabase, Vercel, Google Gemini, YouTube, Gmail); aviso de que el nivel gratuito de Gemini puede usar el contenido para mejorar productos de Google; derechos de acceso, rectificación y eliminación (eliminar cuenta en Ajustes o escribir al contacto).
+- **Privacidad:** datos recogidos (email, idioma, zona horaria, conceptos, suscripciones push, IP para limitar intentos durante 2 días, lista de correos invitados, y los textos normalizados de los conceptos y las fichas generadas, que se comparten entre usuarios sin vincularse a la cuenta y no se borran con ella); finalidad; proveedores (Supabase, Vercel, Google Gemini, YouTube, Gmail); aviso de que el nivel gratuito de Gemini puede usar el contenido para mejorar productos de Google; derechos de acceso, rectificación y eliminación (eliminar cuenta en Ajustes o escribir al contacto).
 - **Cookies:** solo `cb_session` (estrictamente necesaria) y `localStorage` para el idioma y el tema antes de iniciar sesión. Sin analítica ni publicidad, así que no hace falta banner de consentimiento; basta un aviso informativo.
-- **Términos:** uso personal y no comercial, límite diario de uso, contenido generado por IA que puede contener errores, servicio sin garantías durante las pruebas.
+- **Términos:** uso personal y no comercial, registro solo por invitación, límite diario de uso, el administrador puede suspender o cerrar cuentas, contenido generado por IA que puede contener errores y se comparte entre usuarios, servicio sin garantías durante las pruebas.
 - Al registrarse, casilla obligatoria: «Acepto los términos y la política de privacidad».
 
 ---
@@ -557,7 +623,9 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 
 **Cuentas**
 - [ ] Registro → llega el código al correo → cuenta verificada y sesión iniciada.
-- [ ] Registrar un email ya existente responde igual que uno nuevo.
+- [ ] Registrar un email ya existente (y permitido) responde igual que uno nuevo.
+- [ ] Un correo que no está en `allowed_emails` recibe «El registro es solo por invitación» y no se envía ningún código.
+- [ ] Suspender una cuenta con `disabled_at` cierra su sesión al instante y bloquea el login.
 - [ ] Login, logout y recuperación de contraseña funcionan; recuperar cierra las otras sesiones.
 - [ ] 5 fallos seguidos desde una IP fuerzan una espera, pero el dueño puede entrar desde otra red.
 - [ ] El test automático de aislamiento pasa en el CI.
@@ -572,6 +640,9 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 - [ ] Si se cierra la pestaña a mitad, la ficha se completa igualmente gracias al reloj.
 - [ ] Se muestran 2 videos con miniatura y título; el clic abre YouTube.
 - [ ] Un segundo usuario que pide el mismo concepto (aunque lo escriba distinto) en el mismo idioma reutiliza los videos.
+- [ ] Un segundo usuario que escribe el mismo texto (normalizado) en el mismo idioma recibe la ficha sin llamar a Gemini (comprobado con un `FakeAIProvider` que cuenta llamadas).
+- [ ] Dos usuarios que piden a la vez un concepto nuevo terminan con una sola ficha.
+- [ ] Un título de más de 60 caracteres normalizados no crea alias.
 - [ ] Un fallo muestra **Reintentar** y funciona; si la ficha ya existía, no se llama a Gemini.
 - [ ] Al llegar al límite diario se muestra un mensaje claro y no se crea el concepto.
 - [ ] Búsqueda y eliminación en el Cuaderno.
@@ -580,6 +651,7 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 - [ ] Elegir hora y días; la notificación llega en el iPhone (PWA instalada) con un margen de ±2 minutos.
 - [ ] No llega en días no elegidos, ni dos veces el mismo día, ni con el Cuaderno vacío, ni fuera de la ventana de 2 h.
 - [ ] Tocarla abre el concepto sugerido.
+- [ ] Lo mismo en Android (Chrome, con la PWA instalada y sin instalar).
 
 **Siri**
 - [ ] Dictar un concepto lo crea y Siri confirma en el idioma del usuario.
@@ -595,3 +667,4 @@ Borradores en es/en, publicados en `/legal/privacy`, `/legal/cookies` y `/legal/
 - [ ] Anotar los límites reales de Gemini al crear la clave y ajustar `DAILY_CONCEPT_LIMIT`.
 - [ ] Confirmar el tiempo máximo de función en Vercel Hobby en el primer despliegue y ajustar `JOBS_MAX_PER_RUN`.
 - [ ] Verificar la pausa por inactividad y las copias de seguridad del plan gratuito de Supabase.
+- [ ] Después de la Fase 8: probar si una app de atajos de Android puede llamar al endpoint de Siri y si el *Web Share Target* sirve para capturar conceptos.
