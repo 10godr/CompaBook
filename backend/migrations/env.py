@@ -2,6 +2,7 @@ from alembic import context
 from sqlalchemy import create_engine
 from sqlalchemy.pool import NullPool
 
+import app.models  # noqa: F401  (registra los modelos en Base.metadata)
 from app.config import get_settings
 from app.db import Base
 
