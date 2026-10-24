@@ -76,8 +76,8 @@ insert into allowed_emails (email, note) values ('correo@ejemplo.com', 'Nombre')
 
 ## Pendientes
 
-- **Programar la limpieza diaria:** crear un trabajo de `pg_cron` que llame a `POST /internal/cleanup` con `X-Internal-Secret` (leído desde Vault). El endpoint ya funciona; falta programarlo.
-- **Migraciones fuera de local:** hoy se aplican a mano. Decidir si se automatizan en el despliegue.
+- **Limpieza diaria:** programada el 2026-10-23 como `compabook-cleanup` (04:00 UTC, `pg_cron` → `pg_net` → `/internal/cleanup`). Probada a mano con éxito. Falta confirmar en `cron.job_run_details` que corrió sola (a partir del 2026-10-24). Detalle en `pruebas-riesgo.md`.
+- **Migraciones fuera de local:** se siguen aplicando a mano (`alembic upgrade ... --sql` y SQL Editor de Supabase). Automatizarlas se reconsidera cuando haya más (probablemente en la Fase 6b).
 - **Textos legales:** la casilla de términos del registro es texto simple, sin enlaces. Se resuelve en la Fase 9.
 - **Instalación en el iPhone:** Safari y la PWA instalada no comparten cookies, así que hay que iniciar sesión dentro de la app instalada. Va en la guía de instalación (Fase 9).
 - **Cierre de la Fase 4** (a partir del 2026-10-30): prueba H de la cookie, revisar y parar `pg_cron` de prueba, y retirar el código temporal de las pruebas de concepto.
