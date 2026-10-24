@@ -453,6 +453,8 @@ Una función única del backend: minúsculas, quitar tildes (NFKD y eliminar las
 
 Base `/api/v1`. Autenticación por cookie `cb_session`, salvo donde se indica. Errores: `{ "error": { "code": "...", "message": "..." } }`.
 
+Todo `POST` de `/auth` exige la cabecera `X-Requested-With: compabook` (error `csrf`, 403), aunque todavía no haya cookie. Un registro con contraseña débil responde 422 `weak_password` con `reason` (`too_short`, `too_long` o `too_common`). Los límites solo anotan los intentos permitidos, y la respuesta 429 lleva `retry_after`.
+
 Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_found` (404, también para recursos de otro usuario), `rate_limited` (429, con `retry_after` en segundos), `daily_limit_reached` (429), `registration_not_allowed` (403, correo no invitado).
 
 ### Cuenta
@@ -460,8 +462,8 @@ Códigos de error comunes: `validation_error` (422), `unauthorized` (401), `not_
 | Método | Ruta | Descripción |
 |---|---|---|
 | `POST` | `/auth/register` | `{ email, password, language, timezone, accept_terms }` → 202 si el correo está permitido; 403 `registration_not_allowed` si no |
-| `POST` | `/auth/verify-email` | `{ email, code }` → inicia sesión |
-| `POST` | `/auth/resend-code` | `{ email, purpose }` → siempre 202 |
+| `POST` | `/auth/verify-email` | `{ email, code }` → 200 con `{ user }` y la cookie `cb_session`; 400 `invalid_code` para cualquier fallo (código malo, caducado, agotado, correo desconocido o cuenta suspendida) |
+| `POST` | `/auth/resend-code` | `{ email, purpose, language? }` → siempre 202; 429 al pasar de 5 envíos por hora y correo (cuenta igual si la cuenta no existe) |
 | `POST` | `/auth/login` | `{ email, password }` → cookie |
 | `POST` | `/auth/logout` | Cierra la sesión actual |
 | `POST` | `/auth/forgot-password` | `{ email }` → siempre 200 |
