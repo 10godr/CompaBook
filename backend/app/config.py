@@ -21,6 +21,17 @@ class Settings(BaseSettings):
     # Los servicios de push exigen un contacto: un mailto: o una URL https.
     vapid_subject: str = "https://compabook.vercel.app"
 
+    app_url: str = "http://localhost:5173"
+    session_days: int = 30
+
+    # Gmail del proyecto (contraseña de aplicación). Sin ellas, en local los correos salen
+    # por la consola.
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: str | None = None
+    smtp_app_password: str | None = None
+    email_from_name: str = "CompaBook"
+
     # Clave del servidor para firmar (HMAC) los códigos por correo. Larga y aleatoria.
     secret_key: str | None = None
     # Secreto con el que pg_cron llama a /internal/*.

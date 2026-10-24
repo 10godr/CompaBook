@@ -5,6 +5,10 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B"]
 
+[tool.ruff.lint.flake8-bugbear]
+# Patrón normal de FastAPI: Depends() y Header() como valores por defecto de los parámetros.
+extend-immutable-calls = ["fastapi.Depends", "fastapi.Header"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
