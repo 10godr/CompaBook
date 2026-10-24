@@ -165,6 +165,32 @@ select cron.unschedule('compabook-ping');
 
 **Conclusión (2026-10-23):** `pg_cron` llama cada minuto a la función de Vercel con `pg_net`, con el secreto guardado en Vault, y la llamada queda en `net._http_response` y en los registros de Vercel. La arquitectura del reloj es viable en el plan gratuito. La tarea se deja corriendo hasta el 2026-10-30 para ver si Supabase pausa el proyecto (C6).
 
+### Limpieza diaria definitiva (`compabook-cleanup`)
+
+Con el mismo esquema (secreto de Vault en `X-Internal-Secret`) se programó `POST /api/v1/internal/cleanup`.
+
+| # | Resultado | Fecha | Notas |
+|---|---|---|---|
+| L1 | ✅ | 2026-10-23 | Llamada manual con `net.http_post`: reportada por Emile como «todo bien»; sin detalle del `content` |
+| L2 | ✅ | 2026-10-23 | `cron.schedule('compabook-cleanup', '0 4 * * *', ...)`: una vez al día a las 04:00 UTC |
+| L3 | Pendiente | | Comprobar en `cron.job_run_details` que corrió sola tras las 04:00 UTC (a partir del 2026-10-24) |
+
+```sql
+select cron.schedule(
+  'compabook-cleanup',
+  '0 4 * * *',
+  $$
+  select net.http_post(
+    url     := 'https://compabook.vercel.app/api/v1/internal/cleanup',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'X-Internal-Secret', (select decrypted_secret from vault.decrypted_secrets where name = 'internal_secret')
+    )
+  );
+  $$
+);
+```
+
 Notas para decidir al terminar:
 - Dejar la tarea unos días activa también ayuda a responder el pendiente «¿Supabase gratis pausa el proyecto por inactividad aunque `pg_cron` esté activo?». Son unas 1.440 llamadas al día; conviene mirar *Usage* en Vercel y en Supabase para confirmar que caben en el plan.
 - El secreto en Vault solo lo ve quien tenga acceso al panel de Supabase. Para rotarlo: nuevo valor en Vercel, `vault.update_secret` y redeploy.
