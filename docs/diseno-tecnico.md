@@ -37,7 +37,11 @@ Se llama por **REST con `httpx`** (`POST .../models/{modelo}:generateContent`), 
 
 - Cupo gratuito: **10.000 unidades/día** para todo el proyecto; `search.list` cuesta 100 → **~100 búsquedas/día en total**.
 - Por eso se **reutilizan resultados** (`video_cache`, ver §3) y existe el límite diario por usuario (§2.5).
-- Búsqueda: `q=<youtube_search_query que da Gemini>`, `relevanceLanguage=<es|en>`, `type=video`, `videoEmbeddable=true`, `safeSearch=moderate`, `maxResults=5`; se guardan los 2 primeros.
+- Búsqueda: `q=<youtube_search_query que da Gemini>`, `relevanceLanguage=<es|en>`, `type=video`, `videoEmbeddable=true`, `safeSearch=moderate`, `maxResults=5`; se guardan los 2 primeros. Si la consulta está vacía no se llama (no se gasta cupo) y se recorta a 100 caracteres.
+- Se llama por **REST con `httpx`** (`GET .../youtube/v3/search`) detrás de una interfaz `VideoProvider` con `YouTubeProvider`. La clave va en la cabecera `x-goog-api-key`, nunca en la URL. Espera máxima de `YOUTUBE_TIMEOUT_SECONDS` (10 s).
+- Errores (`VideoError.kind`): `quota` (429, o 403 con motivo `quotaExceeded`, `dailyLimitExceeded` o `rateLimitExceeded`), `unavailable` (5xx, tiempo agotado o sin red), `invalid_response` (no es JSON o no trae `items`), `rejected` (400/401/403/404: clave o petición mal) y `not_configured` (sin `YOUTUBE_API_KEY`). El error solo lleva ese tipo.
+- **Lo que devuelve YouTube es un dato no fiable.** Los títulos llegan escapados como HTML (`&amp;`, `&#39;`): se des-escapan, se colapsan los espacios y se recortan (título 200, canal 100), y la web los pinta como texto. El `youtube_id` debe ser de 11 caracteres `[A-Za-z0-9_-]`. La miniatura debe ser `https` y de `ytimg.com` o un subdominio (se comprueba el host ya analizado, no el texto de la URL); se prefiere `high`, luego `medium` y `default`. Un resultado que no cumple se salta sin tirar la búsqueda y no ocupa uno de los 2 sitios; los repetidos cuentan una vez.
+- **Logs.** Solo se registra resultado, código y milisegundos. La consulta va en la URL, y `httpx` registra en INFO cada petición con su URL completa, así que el módulo sube el logger `httpx` a WARNING para que la consulta no llegue a los logs.
 
 ### 1.4 Correo: Gmail del proyecto
 
@@ -568,6 +572,7 @@ GEMINI_MODEL=gemini-3.5-flash
 GEMINI_FALLBACK_MODEL=gemini-3.5-flash-lite
 AI_TIMEOUT_SECONDS=25               # espera máxima por llamada a Gemini
 YOUTUBE_API_KEY=
+YOUTUBE_TIMEOUT_SECONDS=10
 SMTP_HOST=smtp.gmail.com
 SMTP_PORT=587
 SMTP_USER=
