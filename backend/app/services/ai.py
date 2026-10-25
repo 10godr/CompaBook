@@ -22,6 +22,7 @@ logger = logging.getLogger("compabook.ai")
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta"
 CONNECT_TIMEOUT_SECONDS = 5.0
 SLUG_MAX = 60
+QUERY_MAX = 100
 LANGUAGE_NAMES = {"es": "Spanish", "en": "English"}
 
 # busy: cuota agotada (429). unavailable: caído, lento o sin red. invalid_response: contestó algo
@@ -62,6 +63,7 @@ class CardContent(BaseModel):
     example: Prose
     example_code: Annotated[str, StringConstraints(max_length=2000)] | None = None
     example_code_language: str | None = None
+    youtube_search_query: str | None = None
 
     @field_validator("cache_slug", mode="before")
     @classmethod
@@ -86,6 +88,18 @@ class CardContent(BaseModel):
     @classmethod
     def _empty_is_none(cls, value: Any) -> Any:
         return None if isinstance(value, str) and not value.strip() else value
+
+    @field_validator("youtube_search_query", mode="before")
+    @classmethod
+    def _query(cls, value: Any) -> Any:
+        # Solo sirve para buscar en YouTube: si no es un texto corto y sin enlaces, se descarta y la
+        # búsqueda usa el título (nunca tira la ficha).
+        if not isinstance(value, str):
+            return None
+        query = " ".join(value.split())
+        if not query or len(query) > QUERY_MAX or URL.search(query):
+            return None
+        return query
 
     @field_validator("example_code_language")
     @classmethod
@@ -126,9 +140,17 @@ def _system_prompt(language: str) -> str:
             "",
             "Fields:",
             "- canonical_title: the standard name of the concept, at most 80 characters.",
-            "- cache_slug: a stable key in English: lowercase words joined by hyphens, no "
-            "parentheses, acronyms not expanded. Equivalent names in any language must give the "
-            'same key ("CI/CD", "ci cd" and "integración continua" all give "ci-cd").',
+            "- cache_slug: the key that identifies the concept, ALWAYS in English even when the "
+            "concept was written in another language. Take the most common English name of the "
+            "concept (the title of its English Wikipedia article or its usual English term), "
+            "write it in lowercase words joined by hyphens, with no parentheses and no "
+            "expanded acronyms. Never mix languages, never add words such as pipeline, "
+            "concept or tutorial, and keep the usual English word order. Different names, "
+            "spellings or languages for the same concept must give the same key. Examples: "
+            '"k8s", "Kubernetes" and "orquestación de contenedores" -> "kubernetes"; '
+            '"POO", "OOP" and "programación orientada a objetos" -> '
+            '"object-oriented-programming"; "bucle for", "ciclo for" and "for loop" -> '
+            '"for-loop"; "IA" and "inteligencia artificial" -> "artificial-intelligence".',
             "- what_is: 2 to 4 sentences that define it for a beginner.",
             '- what_for: 2 to 4 sentences, or a short list with each line starting with "- ", '
             "about what it is used for.",
@@ -136,6 +158,9 @@ def _system_prompt(language: str) -> str:
             "- example_code: optional. Only when a short snippet (at most 15 lines) of code or "
             "configuration makes the example clearer; otherwise null.",
             "- example_code_language: lowercase name of that language (yaml, python, ...) or null.",
+            "- youtube_search_query: what to type in YouTube to find a good beginner video about "
+            f"the concept, in {LANGUAGE_NAMES[language]}, 3 to 8 words, plain words only: no "
+            "quotes, no links and no operators.",
             "",
             "Plain text only: no markdown headings, no HTML and no links in the text fields.",
         ]
@@ -163,8 +188,16 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         "example": _string(),
         "example_code": _string(nullable=True),
         "example_code_language": _string(nullable=True),
+        "youtube_search_query": _string(),
     },
-    "required": ["canonical_title", "cache_slug", "what_is", "what_for", "example"],
+    "required": [
+        "canonical_title",
+        "cache_slug",
+        "what_is",
+        "what_for",
+        "example",
+        "youtube_search_query",
+    ],
     "propertyOrdering": [
         "canonical_title",
         "cache_slug",
@@ -173,6 +206,7 @@ RESPONSE_SCHEMA: dict[str, Any] = {
         "example",
         "example_code",
         "example_code_language",
+        "youtube_search_query",
     ],
 }
 

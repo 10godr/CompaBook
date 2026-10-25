@@ -196,6 +196,15 @@ def test_procesar_guarda_la_ficha_y_completa_el_trabajo(
     assert job_row(orm, concept_id).locked_at is None
 
 
+def test_la_consulta_de_youtube_de_la_ia_se_guarda_en_la_ficha(
+    client: TestClient, orm: DbSession, ana: str, ai: FakeAIProvider
+) -> None:
+    ai.cards["CI/CD"] = make_content("CI/CD", youtube_search_query="qué es CI/CD explicado")
+    create_and_process(client, ana)
+    query = orm.execute(text("select youtube_search_query from concept_cards")).scalar_one()
+    assert query == "qué es CI/CD explicado"
+
+
 def test_la_ficha_no_expone_datos_internos(client: TestClient, ana: str) -> None:
     concept_id = create_and_process(client, ana)
     card = get(client, ana, f"/{concept_id}").json()["card"]

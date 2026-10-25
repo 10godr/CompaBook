@@ -98,6 +98,7 @@ def test_la_peticion_pide_json_con_esquema_y_lleva_la_clave_en_la_cabecera() -> 
         "what_is",
         "what_for",
         "example",
+        "youtube_search_query",
     ]
 
 
@@ -110,6 +111,25 @@ def test_pide_el_idioma_del_usuario(language: str, name: str) -> None:
     body = gemini.body()
     assert f"Write every field in {name}" in body["systemInstruction"]["parts"][0]["text"]
     assert f"Language of the answer: {name}" in body["contents"][0]["parts"][0]["text"]
+
+
+@pytest.mark.parametrize(
+    "language, name", [("es", "Spanish"), ("en", "English")], ids=["espanol", "ingles"]
+)
+def test_la_consulta_de_youtube_se_pide_en_el_idioma_del_usuario(language: str, name: str) -> None:
+    gemini = Gemini(ok())
+    gemini.provider().generate_card(TITLE, language)
+    prompt = gemini.body()["systemInstruction"]["parts"][0]["text"]
+    line = next(row for row in prompt.splitlines() if row.startswith("- youtube_search_query"))
+    assert f"in {name}" in line
+
+
+def test_el_prompt_pide_una_clave_en_ingles_con_ejemplos() -> None:
+    gemini = Gemini(ok())
+    gemini.provider().generate_card(TITLE, "es")
+    prompt = gemini.body()["systemInstruction"]["parts"][0]["text"]
+    assert "ALWAYS in English" in prompt
+    assert '"for-loop"' in prompt  # los ejemplos de equivalencias
 
 
 def test_el_texto_del_usuario_va_delimitado_y_no_puede_cerrar_la_etiqueta() -> None:
@@ -348,6 +368,32 @@ def test_el_lenguaje_del_codigo_va_en_minusculas_y_si_es_raro_se_descarta() -> N
         **{**VALID_CARD, "example_code_language": "un lenguaje muy raro con espacios"}
     )
     assert odd.example_code_language is None
+
+
+def test_la_consulta_de_youtube_se_guarda_limpia() -> None:
+    card = CardContent(**{**VALID_CARD, "youtube_search_query": "  qué es   CI/CD \n explicado "})
+    assert card.youtube_search_query == "qué es CI/CD explicado"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [None, "", "   ", 5, "x" * 101, "mira https://malo.example", "en www.malo.com"],
+    ids=["nula", "vacia", "espacios", "numero", "larga", "enlace", "www"],
+)
+def test_una_consulta_de_youtube_inservible_se_descarta_sin_tirar_la_ficha(query: object) -> None:
+    card = CardContent(**{**VALID_CARD, "youtube_search_query": query})
+    assert card.youtube_search_query is None
+    assert card.cache_slug == "ci-cd"
+
+
+def test_la_consulta_de_youtube_es_opcional_en_la_ficha() -> None:
+    assert CardContent(**VALID_CARD).youtube_search_query is None
+
+
+def test_el_proveedor_devuelve_la_consulta_de_youtube() -> None:
+    gemini = Gemini(ok({**VALID_CARD, "youtube_search_query": "qué es CI/CD explicado"}))
+    card = gemini.provider().generate_card(TITLE, "es")
+    assert card.content.youtube_search_query == "qué es CI/CD explicado"
 
 
 def test_quita_los_espacios_de_los_extremos() -> None:
