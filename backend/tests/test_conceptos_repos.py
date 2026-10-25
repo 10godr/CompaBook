@@ -8,8 +8,14 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session as DbSession
 
-from app.models import Concept, ConceptCard, ProcessingJob, User
-from app.repositories import ConceptCardRepository, ConceptRepository
+from app.models import Concept, ConceptAlias, ConceptCard, ProcessingJob, User, VideoCache
+from app.repositories import (
+    ConceptAliasRepository,
+    ConceptCardRepository,
+    ConceptRepository,
+    NewVideo,
+    VideoCacheRepository,
+)
 
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
 
@@ -387,3 +393,119 @@ def test_fallar_suma_un_intento_y_guarda_solo_el_tipo_de_error(
     repository.reset_job(concept.id, NOW)
     job = job_of(orm, concept)
     assert (job.status, job.stage, job.attempts, job.locked_at) == ("pending", "queued", 0, None)
+
+
+# --- Alias ---------------------------------------------------------------------------------
+
+
+def test_un_alias_lleva_a_su_ficha(orm: DbSession) -> None:
+    card, _ = ConceptCardRepository(orm).insert_if_absent(**card_values())
+    aliases = ConceptAliasRepository(orm)
+    assert aliases.add_if_absent("es", "integracion continua", "ci-cd", NOW) is True
+    found = aliases.get_card("es", "integracion continua")
+    assert found is not None
+    assert found.id == card.id
+
+
+def test_un_alias_desconocido_no_lleva_a_ninguna_ficha(orm: DbSession) -> None:
+    ConceptCardRepository(orm).insert_if_absent(**card_values())
+    assert ConceptAliasRepository(orm).get_card("es", "algo nuevo") is None
+
+
+def test_el_alias_solo_vale_en_su_idioma(orm: DbSession) -> None:
+    ConceptCardRepository(orm).insert_if_absent(**card_values(language="es"))
+    ConceptCardRepository(orm).insert_if_absent(**card_values(language="en"))
+    aliases = ConceptAliasRepository(orm)
+    aliases.add_if_absent("es", "docker", "ci-cd", NOW)
+    assert aliases.get_card("en", "docker") is None
+
+
+def test_el_primer_alias_gana_y_el_segundo_se_descarta(orm: DbSession) -> None:
+    ConceptCardRepository(orm).insert_if_absent(**card_values(slug="ci-cd"))
+    ConceptCardRepository(orm).insert_if_absent(**card_values(slug="otra"))
+    aliases = ConceptAliasRepository(orm)
+    assert aliases.add_if_absent("es", "ci cd", "ci-cd", NOW) is True
+    assert aliases.add_if_absent("es", "ci cd", "otra", NOW) is False
+    found = aliases.get_card("es", "ci cd")
+    assert found is not None
+    assert found.cache_slug == "ci-cd"
+    assert orm.scalar(select(func.count()).select_from(ConceptAlias)) == 1
+
+
+def test_la_ficha_guarda_la_consulta_de_youtube(orm: DbSession) -> None:
+    card, _ = ConceptCardRepository(orm).insert_if_absent(
+        **card_values(youtube_search_query="qué es CI/CD explicado")
+    )
+    assert card.youtube_search_query == "qué es CI/CD explicado"
+
+
+def test_una_ficha_sin_consulta_de_youtube_queda_en_nulo(orm: DbSession) -> None:
+    card, _ = ConceptCardRepository(orm).insert_if_absent(**card_values())
+    assert card.youtube_search_query is None
+
+
+# --- Videos --------------------------------------------------------------------------------
+
+
+def video(number: int) -> NewVideo:
+    return NewVideo(
+        youtube_id=f"id{number}",
+        title=f"Video {number}",
+        channel=f"Canal {number}",
+        thumbnail_url=f"https://i.ytimg.com/vi/id{number}/hqdefault.jpg",
+    )
+
+
+def test_los_videos_se_guardan_y_se_leen_en_orden(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    videos.save_if_absent("ci-cd", "es", [video(1), video(2)], NOW)
+    found = videos.get("ci-cd", "es")
+    assert [(v.position, v.youtube_id, v.title, v.channel) for v in found] == [
+        (1, "id1", "Video 1", "Canal 1"),
+        (2, "id2", "Video 2", "Canal 2"),
+    ]
+
+
+def test_sin_busqueda_previa_no_hay_videos(orm: DbSession) -> None:
+    assert VideoCacheRepository(orm).get("ci-cd", "es") == []
+
+
+def test_los_videos_son_por_concepto_e_idioma(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    videos.save_if_absent("ci-cd", "es", [video(1), video(2)], NOW)
+    assert videos.get("ci-cd", "en") == []
+    assert videos.get("docker", "es") == []
+
+
+def test_solo_se_guardan_dos_videos(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    videos.save_if_absent("ci-cd", "es", [video(1), video(2), video(3)], NOW)
+    assert [v.youtube_id for v in videos.get("ci-cd", "es")] == ["id1", "id2"]
+
+
+def test_un_solo_video_tambien_vale(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    videos.save_if_absent("ci-cd", "es", [video(1)], NOW)
+    assert [v.position for v in videos.get("ci-cd", "es")] == [1]
+
+
+def test_sin_videos_no_se_guarda_nada(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    videos.save_if_absent("ci-cd", "es", [], NOW)
+    assert videos.get("ci-cd", "es") == []
+    assert orm.scalar(select(func.count()).select_from(VideoCache)) == 0
+
+
+def test_la_primera_busqueda_gana_y_la_segunda_se_descarta(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    videos.save_if_absent("ci-cd", "es", [video(1), video(2)], NOW)
+    videos.save_if_absent("ci-cd", "es", [video(8), video(9)], NOW)
+    assert [v.youtube_id for v in videos.get("ci-cd", "es")] == ["id1", "id2"]
+
+
+def test_el_titulo_de_un_video_se_guarda_tal_cual_como_texto(orm: DbSession) -> None:
+    videos = VideoCacheRepository(orm)
+    odd = NewVideo("abc", "<b>Hola</b> & 'adiós'", None, "https://i.ytimg.com/vi/abc/h.jpg")
+    videos.save_if_absent("ci-cd", "es", [odd], NOW)
+    saved = videos.get("ci-cd", "es")[0]
+    assert (saved.title, saved.channel) == ("<b>Hola</b> & 'adiós'", None)

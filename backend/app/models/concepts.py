@@ -6,7 +6,9 @@ from datetime import datetime
 from sqlalchemy import (
     CheckConstraint,
     ForeignKey,
+    ForeignKeyConstraint,
     Index,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -41,7 +43,58 @@ class ConceptCard(Base):
     example_code: Mapped[str | None] = mapped_column(Text, nullable=True)
     example_code_language: Mapped[str | None] = mapped_column(Text, nullable=True)
     model: Mapped[str] = mapped_column(Text)
+    # Lo que se busca en YouTube, en el idioma de la ficha. Nulo en las fichas de la Fase 6a.
+    youtube_search_query: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class ConceptAlias(Base):
+    """«integracion continua» → la ficha `ci-cd`. Compartida: no guarda a ningún usuario.
+
+    Sirve para no llamar a Gemini con un texto que ya se vio (diseno-tecnico.md §5.5). Si la ficha
+    se borra, sus alias se borran con ella.
+    """
+
+    __tablename__ = "concept_aliases"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["cache_slug", "language"],
+            ["concept_cards.cache_slug", "concept_cards.language"],
+            ondelete="CASCADE",
+            name="concept_aliases_card_fkey",
+        ),
+        CheckConstraint("char_length(alias) between 1 and 60", name="concept_aliases_alias_check"),
+        CheckConstraint("language in ('es', 'en')", name="concept_aliases_language_check"),
+    )
+
+    language: Mapped[str] = mapped_column(String(2), primary_key=True)
+    # El título normalizado (minúsculas, sin tildes, espacios colapsados).
+    alias: Mapped[str] = mapped_column(Text, primary_key=True)
+    cache_slug: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+
+class VideoCache(Base):
+    """Los 2 videos de un concepto, compartidos entre usuarios por (cache_slug, language)."""
+
+    __tablename__ = "video_cache"
+    __table_args__ = (
+        UniqueConstraint(
+            "cache_slug", "language", "position", name="video_cache_slug_language_position_key"
+        ),
+        CheckConstraint("position in (1, 2)", name="video_cache_position_check"),
+        CheckConstraint("language in ('es', 'en')", name="video_cache_language_check"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, **UUID_PK)
+    cache_slug: Mapped[str] = mapped_column(Text)
+    language: Mapped[str] = mapped_column(String(2))
+    position: Mapped[int] = mapped_column(SmallInteger)
+    youtube_id: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    channel: Mapped[str | None] = mapped_column(Text, nullable=True)
+    thumbnail_url: Mapped[str] = mapped_column(Text)
+    fetched_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
 
 class Concept(Base):
