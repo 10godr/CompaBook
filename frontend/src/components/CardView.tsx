@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import type { ConceptDetail } from '../concepts/types'
+import VideoCards from './VideoCards'
 
 function CodeBlock({ code, language }: { code: string; language: string | null }) {
   const { t } = useTranslation()
@@ -66,6 +67,7 @@ export default function CardView({ concept }: { concept: ConceptDetail }) {
         <p className="reading">{card.example}</p>
         {card.example_code ? <CodeBlock code={card.example_code} language={card.example_code_language} /> : null}
       </section>
+      <VideoCards videos={concept.videos} />
     </article>
   )
 }
