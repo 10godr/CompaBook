@@ -172,17 +172,24 @@
       "what_for": "Para qué sirve",
       "example": "Ejemplo"
     },
+    "videos": {
+      "title": "Videos",
+      "none": "No encontramos videos para este concepto"
+    },
     "copy": "Copiar",
     "copied": "Copiado",
     "stages": {
       "queued": "En cola",
       "writing": "Escribiendo",
+      "finding_videos": "Buscando videos",
       "done": "¡Listo!"
     },
     "progress": {
       "label": "Progreso",
       "queued": "En cola, ya casi le toca…",
       "writing": "Escribiendo la explicación…",
+      "finding_videos": "Buscando videos…",
+      "retrying": "Reintentando…",
       "done": "¡Listo!"
     },
     "slow": "Está tardando más de lo normal. Puedes volver más tarde: la verás en tu Cuaderno.",

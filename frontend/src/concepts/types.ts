@@ -25,10 +25,17 @@ export interface CardContent {
   example_code_language: string | null
 }
 
+export interface Video {
+  youtube_id: string
+  title: string
+  channel: string | null
+  thumbnail_url: string
+}
+
 export interface ConceptDetail extends ConceptSummary {
   source: string
   card: CardContent | null
-  videos: unknown[]
+  videos: Video[]
 }
 
 export interface ConceptPage {

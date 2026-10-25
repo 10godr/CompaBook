@@ -74,7 +74,7 @@ function ConceptView({ id }: { id: string }) {
   return (
     <>
       {back}
-      {isActive(concept.status) ? <LoadingPanel stage={concept.stage} slow={slow} /> : null}
+      {isActive(concept.status) ? <LoadingPanel stage={concept.stage} attempts={concept.attempts} slow={slow} /> : null}
 
       {concept.status === 'failed' ? (
         <section className="panel panel-error">

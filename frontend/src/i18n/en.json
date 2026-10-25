@@ -172,17 +172,24 @@
       "what_for": "What it's for",
       "example": "Example"
     },
+    "videos": {
+      "title": "Videos",
+      "none": "We couldn't find videos for this concept"
+    },
     "copy": "Copy",
     "copied": "Copied",
     "stages": {
       "queued": "Queued",
       "writing": "Writing",
+      "finding_videos": "Finding videos",
       "done": "Done!"
     },
     "progress": {
       "label": "Progress",
       "queued": "In line, almost there…",
       "writing": "Writing the explanation…",
+      "finding_videos": "Finding videos…",
+      "retrying": "Retrying…",
       "done": "Done!"
     },
     "slow": "This is taking longer than usual. You can come back later: you'll find it in your Notebook.",

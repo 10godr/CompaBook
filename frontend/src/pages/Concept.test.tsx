@@ -4,13 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { setLanguage } from '../i18n'
 import { apiError, mockApi } from '../test/mockApi'
-import { CARD, detail, me } from '../test/concepts'
+import { CARD, detail, me, VIDEOS } from '../test/concepts'
 import App from '../App'
 import { renderApp } from '../test/render'
 
 const session = { 'GET /me': me() }
 const queued = detail({ status: 'pending', stage: 'queued', card: null })
 const writing = detail({ status: 'processing', stage: 'writing', card: null })
+const findingVideos = detail({ status: 'processing', stage: 'finding_videos', card: null })
+const retrying = detail({ status: 'pending', stage: 'queued', attempts: 1, card: null })
 const failed = detail({ status: 'failed', stage: 'writing', attempts: 1, card: null })
 const STATUS_DONE = { body: { status: 'completed', stage: 'done', attempts: 0 } }
 
@@ -61,9 +63,72 @@ describe('Ficha: generación', () => {
     renderApp('/cuaderno/c1')
     expect(await screen.findByText('En cola, ya casi le toca…')).toBeInTheDocument()
     const steps = within(screen.getByRole('list', { name: 'Progreso' })).getAllByRole('listitem')
-    expect(steps.map((step) => step.textContent)).toEqual(['En cola', 'Escribiendo', '¡Listo!'])
+    expect(steps.map((step) => step.textContent)).toEqual(['En cola', 'Escribiendo', 'Buscando videos', '¡Listo!'])
     expect(steps[0]).toHaveAttribute('aria-current', 'step')
     expect(screen.queryByRole('heading', { name: 'CI/CD' })).toBeNull()
+  })
+
+  it('buscando videos marca ese paso como el actual y deja los anteriores como hechos', async () => {
+    mockApi({ ...session, 'GET /concepts/c1': { body: findingVideos }, 'GET /concepts/c1/status': { body: findingVideos } })
+    renderApp('/cuaderno/c1')
+    expect(await screen.findByText('Buscando videos…')).toBeInTheDocument()
+    const steps = within(screen.getByRole('list', { name: 'Progreso' })).getAllByRole('listitem')
+    expect(steps.map((step) => step.className)).toEqual([
+      'stage stage-done',
+      'stage stage-done',
+      'stage stage-current',
+      'stage stage-todo',
+    ])
+    expect(steps[2]).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('un trabajo que vuelve a la cola tras un fallo dice que se está reintentando', async () => {
+    mockApi({
+      ...session,
+      'GET /concepts/c1': { body: retrying },
+      'POST /concepts/c1/process': () => new Promise<never>(() => undefined),
+    })
+    renderApp('/cuaderno/c1')
+    expect(await screen.findByText('Reintentando…')).toBeInTheDocument()
+    expect(screen.queryByText('En cola, ya casi le toca…')).toBeNull()
+    const steps = within(screen.getByRole('list', { name: 'Progreso' })).getAllByRole('listitem')
+    expect(steps[0]).toHaveAttribute('aria-current', 'step')
+  })
+
+  it('el texto de reintento aparece cuando el sondeo informa del fallo, y se va al volver a escribir', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let state = { status: 'processing', stage: 'writing', attempts: 0 }
+    mockApi({
+      ...session,
+      'GET /concepts/c1': { body: writing },
+      'GET /concepts/c1/status': () => ({ body: state }),
+    })
+    renderApp('/cuaderno/c1')
+    expect(await screen.findByText('Escribiendo la explicación…')).toBeInTheDocument()
+    state = { status: 'pending', stage: 'queued', attempts: 1 }
+    await act(() => vi.advanceTimersByTimeAsync(2100))
+    expect(await screen.findByText('Reintentando…')).toBeInTheDocument()
+    state = { status: 'processing', stage: 'writing', attempts: 1 }
+    await act(() => vi.advanceTimersByTimeAsync(2100))
+    expect(await screen.findByText('Escribiendo la explicación…')).toBeInTheDocument()
+    expect(screen.queryByText('Reintentando…')).toBeNull()
+  })
+
+  it('al terminar la búsqueda de videos aparece la ficha con ellos', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    let done = false
+    mockApi({
+      ...session,
+      'GET /concepts/c1': () => ({ body: done ? detail({ videos: VIDEOS }) : findingVideos }),
+      'GET /concepts/c1/status': () => (done ? STATUS_DONE : { body: { status: 'processing', stage: 'finding_videos', attempts: 0 } }),
+    })
+    renderApp('/cuaderno/c1')
+    expect(await screen.findByText('Buscando videos…')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Videos' })).toBeNull()
+    done = true
+    await act(() => vi.advanceTimersByTimeAsync(2100))
+    expect(await screen.findByRole('heading', { name: 'Videos' })).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /CI\/CD/ })).toHaveLength(2)
   })
 
   it('si otro proceso ya lo está generando, no lo pide otra vez y sigue su estado hasta el final', async () => {
@@ -176,12 +241,11 @@ describe('Ficha: contenido', () => {
     expect(await screen.findByRole('button', { name: 'Copiado' })).toBeInTheDocument()
   })
 
-  it('sin código de ejemplo no hay bloque, y en la 6a no hay sección de videos', async () => {
+  it('sin código de ejemplo no hay bloque', async () => {
     mockApi({ ...session, 'GET /concepts/c1': { body: detail() } })
     renderApp('/cuaderno/c1')
     await screen.findByRole('heading', { name: 'CI/CD' })
     expect(screen.queryByRole('button', { name: 'Copiar' })).toBeNull()
-    expect(screen.queryByRole('heading', { name: /Videos/i })).toBeNull()
   })
 
   it('muestra lo que escribió el usuario solo si es distinto del título de la ficha', async () => {
@@ -206,6 +270,71 @@ describe('Ficha: contenido', () => {
     renderApp('/cuaderno/c1')
     expect(await screen.findByRole('heading', { name: 'What it is' })).toBeInTheDocument()
     expect(screen.getByRole('heading', { name: "What it's for" })).toBeInTheDocument()
+  })
+})
+
+describe('Ficha: videos', () => {
+  it('muestra los dos videos debajo de la ficha, cada uno con su miniatura y su enlace a YouTube', async () => {
+    mockApi({ ...session, 'GET /concepts/c1': { body: detail({ videos: VIDEOS }) } })
+    const { container } = renderApp('/cuaderno/c1')
+    expect(await screen.findByRole('heading', { name: 'Videos' })).toBeInTheDocument()
+    const links = screen.getAllByRole('link', { name: /CI\/CD/ })
+    expect(links).toHaveLength(2)
+    expect(links[0]).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abcdefghij1')
+    expect(links[1]).toHaveAttribute('href', 'https://www.youtube.com/watch?v=abcdefghij2')
+    for (const link of links) {
+      expect(link).toHaveAttribute('target', '_blank')
+      expect(link).toHaveAttribute('rel', expect.stringContaining('noopener'))
+    }
+    const thumbs = container.querySelectorAll('.video-thumb')
+    expect([...thumbs].map((img) => img.getAttribute('src'))).toEqual([
+      'https://i.ytimg.com/vi/abcdefghij1/hqdefault.jpg',
+      'https://i.ytimg.com/vi/abcdefghij2/hqdefault.jpg',
+    ])
+    expect([...thumbs].every((img) => img.getAttribute('loading') === 'lazy')).toBe(true)
+  })
+
+  it('el canal sale si existe y no se inventa si falta', async () => {
+    mockApi({ ...session, 'GET /concepts/c1': { body: detail({ videos: VIDEOS }) } })
+    const { container } = renderApp('/cuaderno/c1')
+    expect(await screen.findByText('Canal Uno')).toBeInTheDocument()
+    expect(container.querySelectorAll('.video-channel')).toHaveLength(1)
+  })
+
+  it('el título y el canal son texto: nada de lo que manda YouTube se interpreta como HTML', async () => {
+    const hostile = {
+      youtube_id: 'abcdefghij3',
+      title: 'Truco <img src=x onerror=alert(1)> & <b>negrita</b>',
+      channel: '<script>alert(2)</script>',
+      thumbnail_url: 'https://i.ytimg.com/vi/abcdefghij3/hqdefault.jpg',
+    }
+    mockApi({ ...session, 'GET /concepts/c1': { body: detail({ videos: [hostile] }) } })
+    const { container } = renderApp('/cuaderno/c1')
+    expect(await screen.findByText(hostile.title)).toBeInTheDocument()
+    expect(screen.getByText(hostile.channel)).toBeInTheDocument()
+    expect(container.querySelectorAll('.video-card img')).toHaveLength(1) // solo la miniatura
+    expect(container.querySelector('.video-card b, .video-card script')).toBeNull()
+  })
+
+  it('sin videos (YouTube falló o no encontró) la ficha se muestra igual con un aviso', async () => {
+    mockApi({ ...session, 'GET /concepts/c1': { body: detail({ videos: [] }) } })
+    renderApp('/cuaderno/c1')
+    expect(await screen.findByRole('heading', { name: 'CI/CD' })).toBeInTheDocument()
+    expect(screen.getByText('Qué es.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Videos' })).toBeInTheDocument()
+    expect(screen.getByText('No encontramos videos para este concepto')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /CI\/CD/ })).toBeNull()
+  })
+
+  it('en inglés, la sección y el aviso salen en inglés', async () => {
+    mockApi({
+      'GET /me': { body: { user: { ...me().body.user, language: 'en' }, usage: { concepts_today: 0, daily_limit: 30 } } },
+      'GET /concepts/c1': { body: detail({ videos: [] }) },
+    })
+    setLanguage('en')
+    renderApp('/cuaderno/c1')
+    expect(await screen.findByRole('heading', { name: 'Videos' })).toBeInTheDocument()
+    expect(screen.getByText("We couldn't find videos for this concept")).toBeInTheDocument()
   })
 })
 

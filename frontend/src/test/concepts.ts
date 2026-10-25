@@ -1,4 +1,4 @@
-import type { CardContent, ConceptDetail, ConceptSummary } from '../concepts/types'
+import type { CardContent, ConceptDetail, ConceptSummary, Video } from '../concepts/types'
 import { ANA } from './mockApi'
 
 export const CARD: CardContent = {
@@ -9,6 +9,21 @@ export const CARD: CardContent = {
   example_code: null,
   example_code_language: null,
 }
+
+export const VIDEOS: Video[] = [
+  {
+    youtube_id: 'abcdefghij1',
+    title: 'CI/CD en 10 minutos',
+    channel: 'Canal Uno',
+    thumbnail_url: 'https://i.ytimg.com/vi/abcdefghij1/hqdefault.jpg',
+  },
+  {
+    youtube_id: 'abcdefghij2',
+    title: 'Qué es CI/CD',
+    channel: null,
+    thumbnail_url: 'https://i.ytimg.com/vi/abcdefghij2/hqdefault.jpg',
+  },
+]
 
 export function summary(override: Partial<ConceptSummary> = {}): ConceptSummary {
   return {
