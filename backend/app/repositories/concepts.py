@@ -90,29 +90,70 @@ class ConceptRepository:
 
     # --- Trabajos -------------------------------------------------------------------------
 
-    def claim_job(self, concept_id: uuid.UUID, now: datetime) -> bool:
-        """Toma el trabajo `pending` del concepto. False si no lo está o ya lo tiene otro proceso.
+    def claim_job(
+        self, concept_id: uuid.UUID, now: datetime, stale_before: datetime
+    ) -> "JobClaim | None":
+        """Toma el trabajo del concepto si le toca; None si no le toca o ya lo tiene otro proceso.
 
-        `SKIP LOCKED` hace que un segundo proceso no espere: pasa de largo y se entera de que
-        el trabajo ya no está libre.
+        Le toca si está `pending` con `next_run_at <= now`, o si está `processing` con `locked_at`
+        anterior a `stale_before` (la función que lo tenía murió a medias). `SKIP LOCKED` hace que
+        un segundo proceso no espere: pasa de largo y se entera de que el trabajo ya no está libre.
+
+        Recoger un trabajo abandonado cuenta como un intento: si con él se llega a `max_attempts`,
+        el trabajo pasa a `failed` (`abandoned`) y tampoco se toma. Quien llama debe confirmar.
         """
-        job_id = self.db.scalar(
-            select(ProcessingJob.id)
+        job = self.db.execute(
+            select(
+                ProcessingJob.id,
+                ProcessingJob.status,
+                ProcessingJob.attempts,
+                ProcessingJob.max_attempts,
+            )
             .where(
                 ProcessingJob.concept_id == concept_id,
                 ProcessingJob.user_id == self.user_id,
-                ProcessingJob.status == "pending",
+                or_(
+                    and_(ProcessingJob.status == "pending", ProcessingJob.next_run_at <= now),
+                    and_(
+                        ProcessingJob.status == "processing", ProcessingJob.locked_at < stale_before
+                    ),
+                ),
             )
             .with_for_update(skip_locked=True)
-        )
-        if job_id is None:
-            return False
+        ).one_or_none()
+        if job is None:
+            return None
+        attempts = job.attempts
+        if job.status == "processing":
+            attempts += 1
+            if attempts >= job.max_attempts:
+                self.db.execute(
+                    update(ProcessingJob)
+                    .where(ProcessingJob.id == job.id)
+                    .values(
+                        status="failed",
+                        locked_at=None,
+                        last_error="abandoned",
+                        attempts=attempts,
+                        updated_at=now,
+                    )
+                )
+                return None
         self.db.execute(
             update(ProcessingJob)
-            .where(ProcessingJob.id == job_id)
-            .values(status="processing", stage="writing", locked_at=now, updated_at=now)
+            .where(ProcessingJob.id == job.id)
+            .values(
+                status="processing",
+                stage="writing",
+                locked_at=now,
+                attempts=attempts,
+                updated_at=now,
+            )
         )
-        return True
+        return JobClaim(attempts=attempts)
+
+    def set_stage(self, concept_id: uuid.UUID, stage: str, now: datetime) -> None:
+        self._update_job(concept_id, stage=stage, updated_at=now)
 
     def complete_job(self, concept_id: uuid.UUID, now: datetime) -> None:
         self._update_job(
@@ -124,18 +165,32 @@ class ConceptRepository:
             updated_at=now,
         )
 
-    def fail_job(self, concept_id: uuid.UUID, error: str, now: datetime) -> None:
-        """Marca el trabajo como fallido. `error` es solo el tipo, nunca contenido."""
+    def fail_job(
+        self,
+        concept_id: uuid.UUID,
+        error: str,
+        now: datetime,
+        retry_at: datetime | None = None,
+    ) -> None:
+        """Cuenta un intento fallido. `error` es solo el tipo, nunca contenido.
+
+        Con `retry_at` el trabajo vuelve a `pending` para esa hora (el reloj lo recogerá); sin
+        él queda `failed` y el usuario decide si pulsa Reintentar.
+        """
+        values: dict[str, object] = {
+            "locked_at": None,
+            "last_error": error,
+            "attempts": ProcessingJob.attempts + 1,
+            "updated_at": now,
+        }
+        if retry_at is None:
+            values["status"] = "failed"
+        else:
+            values.update(status="pending", stage="queued", next_run_at=retry_at)
         self.db.execute(
             update(ProcessingJob)
             .where(ProcessingJob.concept_id == concept_id, ProcessingJob.user_id == self.user_id)
-            .values(
-                status="failed",
-                locked_at=None,
-                last_error=error,
-                attempts=ProcessingJob.attempts + 1,
-                updated_at=now,
-            )
+            .values(**values)
         )
 
     def reset_job(self, concept_id: uuid.UUID, now: datetime) -> None:
@@ -156,6 +211,48 @@ class ConceptRepository:
             .where(ProcessingJob.concept_id == concept_id, ProcessingJob.user_id == self.user_id)
             .values(**values)
         )
+
+
+@dataclass(frozen=True)
+class JobClaim:
+    """Lo que sabe quien tomó un trabajo: cuántos intentos lleva (el abandonado ya contado)."""
+
+    attempts: int
+
+
+@dataclass(frozen=True)
+class DueJob:
+    concept_id: uuid.UUID
+    user_id: uuid.UUID
+
+
+class JobQueueRepository:
+    """La cola de trabajos de TODOS los usuarios: solo la usa el reloj (`/internal/jobs`).
+
+    Es la única excepción a la regla de filtrar por `user_id`: el reloj no tiene sesión y necesita
+    saber qué trabajos le tocan, sea de quien sea. Solo devuelve ids; el trabajo en sí se hace
+    luego con `ConceptRepository(db, user_id)`, como cualquier otra petición.
+    """
+
+    def __init__(self, db: DbSession) -> None:
+        self.db = db
+
+    def due(self, now: datetime, stale_before: datetime, limit: int) -> list[DueJob]:
+        """Los trabajos a los que les toca, el más atrasado primero (sin bloquearlos)."""
+        rows = self.db.execute(
+            select(ProcessingJob.concept_id, ProcessingJob.user_id)
+            .where(
+                or_(
+                    and_(ProcessingJob.status == "pending", ProcessingJob.next_run_at <= now),
+                    and_(
+                        ProcessingJob.status == "processing", ProcessingJob.locked_at < stale_before
+                    ),
+                )
+            )
+            .order_by(ProcessingJob.next_run_at, ProcessingJob.id)
+            .limit(limit)
+        ).all()
+        return [DueJob(row.concept_id, row.user_id) for row in rows]
 
 
 class ConceptCardRepository:

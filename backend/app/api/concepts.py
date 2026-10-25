@@ -10,9 +10,11 @@ from app.api.deps import current_user, require_csrf_header
 from app.db import get_db
 from app.errors import ApiError
 from app.models import Concept, User
-from app.repositories import ConceptRepository
+from app.repositories import ConceptRepository, VideoCacheRepository
 from app.services import concepts as service
+from app.services import jobs
 from app.services.ai import AIProvider, get_ai_provider
+from app.services.youtube import VideoProvider, get_video_provider
 
 router = APIRouter(prefix="/concepts")
 
@@ -70,6 +72,23 @@ def _card(concept: Concept) -> dict[str, object] | None:
     }
 
 
+def _videos(db: DbSession, concept: Concept) -> list[dict[str, object]]:
+    """Los videos de la ficha, leídos al pedir el concepto (no se copian a cada concepto)."""
+    card = concept.card
+    if card is None:
+        return []
+    found = VideoCacheRepository(db).get(card.cache_slug, card.language)
+    return [
+        {
+            "youtube_id": video.youtube_id,
+            "title": video.title,
+            "channel": video.channel,
+            "thumbnail_url": video.thumbnail_url,
+        }
+        for video in found
+    ]
+
+
 @router.post("", status_code=201, dependencies=[Depends(require_csrf_header)])
 def create_concept(
     body: CreateBody,
@@ -114,7 +133,7 @@ def get_concept(
         **_summary(concept, service.utcnow()),
         "source": concept.source,
         "card": _card(concept),
-        "videos": [],  # los videos llegan con la 6b
+        "videos": _videos(db, concept),
     }
 
 
@@ -137,8 +156,9 @@ def process_concept(
     user: User = Depends(current_user),
     db: DbSession = Depends(get_db),
     ai: AIProvider = Depends(get_ai_provider),
+    videos: VideoProvider = Depends(get_video_provider),
 ) -> dict[str, object]:
-    state, finished = service.process_concept(db, ai, user, concept_id)
+    state, finished = jobs.process_concept(db, ai, videos, user, concept_id)
     if not finished:
         response.status_code = 202  # otro proceso lo está haciendo
     return state

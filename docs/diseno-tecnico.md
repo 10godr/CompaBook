@@ -56,7 +56,7 @@ Se llama por **REST con `httpx`** (`POST .../models/{modelo}:generateContent`), 
 
 - Un **único proyecto**: el frontend estático y el backend en `/api`, bajo el **mismo dominio** `*.vercel.app`.
 - Esto es importante: con el mismo origen la cookie de sesión es *first-party*. Safari en iPhone bloquea cookies de terceros, y si frontend y backend estuvieran en dominios distintos el login fallaría.
-- Cada invocación tiene un tiempo máximo; `/internal/jobs` procesa pocos trabajos por llamada (`JOBS_MAX_PER_RUN`) y la generación al momento procesa uno solo.
+- Cada invocación tiene un tiempo máximo; `/internal/jobs` procesa pocos trabajos por llamada (`JOBS_MAX_PER_RUN`) y no empieza otro pasados `JOBS_BUDGET_SECONDS`; la generación al momento procesa uno solo.
 - Cada PR genera un **preview** con su propia URL, conectado a `compabook-dev`.
 
 ### 1.6 Web Push
@@ -330,11 +330,11 @@ La zona horaria vive solo en `users.timezone`; los recordatorios la leen de ahí
 
 Si la pestaña se cierra o la petición se corta, el trabajo sigue `pending` o queda `processing` con `locked_at` antiguo, y el reloj lo recoge.
 
-**Fase 6a (antes de que exista el reloj).** Las tablas y `/process` ya tienen su forma final, pero no hay quien recoja los trabajos:
-- Si falla el paso 1, el trabajo pasa **directamente a `failed`** (sin espera ni reintento automático) y el usuario pulsa **Reintentar**. Los reintentos automáticos con `next_run_at` llegan con `/internal/jobs` en la 6b.
-- `/process` **no mantiene abierta ninguna transacción mientras llama a Gemini**: reclama el trabajo y confirma, llama a la IA y luego guarda la ficha en otra transacción.
-- Un trabajo `processing` con `locked_at` de hace más de 5 minutos (la función murió a medias) se trata como fallido: el estado lo informa como `failed` y **Reintentar** lo acepta.
-- Sin videos todavía: la ficha se entrega con `videos: []` y la pantalla no muestra esa sección.
+**Cómo se comparte el trabajo.** `/process` y el reloj (§4.2) ejecutan **el mismo código** (`services/jobs.py`); solo cambia quién lo pide.
+- `/process` **respeta `next_run_at`**: si el trabajo espera su turno de reintento (§4.3) responde 202 con el estado, sin llamar a nadie. Si está resuelto, 200 sin llamar a la IA.
+- **No se mantiene abierta ninguna transacción** mientras se espera a Gemini o a YouTube: se reclama el trabajo y se confirma, se llama al servicio y el resultado se guarda en otra transacción.
+- Un trabajo `processing` con `locked_at` de hace más de 5 minutos (la función murió a medias) **se ve como `pending`/`queued`** y lo recoge el siguiente `/process` o el reloj. Ese intento abandonado **cuenta**: si con él se llegan a `max_attempts`, el trabajo pasa a `failed` (`last_error = abandoned`).
+- La ficha se entrega con `videos` leídos por `(cache_slug, language)` al pedir el concepto (§5.4): no se copian a cada concepto.
 
 ### 4.2 El reloj
 
@@ -355,6 +355,27 @@ select net.http_post(
 
 Separarlas evita que una llamada lenta a Gemini retrase los recordatorios o corte la función por tiempo.
 
+**`pg_net` espera 5 s por defecto** y la función de trabajos puede tardar hasta ~60 s, así que la tarea de trabajos fija `timeout_milliseconds` por encima de lo que dura una llamada. Sin eso `pg_net` daría el timeout a los 5 s y cerraría la conexión con la función a medias. **Pendiente de verificar en producción:** que un trabajo largo (30–60 s) termina y deja su resultado, y que `net._http_response` muestra `status_code = 200` y no un timeout.
+
+```sql
+select cron.schedule(
+  'compabook-jobs',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url     := 'https://compabook.vercel.app/api/v1/internal/jobs',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'X-Internal-Secret', (select decrypted_secret from vault.decrypted_secrets where name = 'internal_secret')
+    ),
+    timeout_milliseconds := 58000
+  );
+  $$
+);
+```
+
+Para pararla: `select cron.unschedule('compabook-jobs');`. Dos llamadas solapadas no se pisan: cada trabajo se reclama con `FOR UPDATE SKIP LOCKED`.
+
 ### 4.3 Procesar un trabajo
 
 ```
@@ -370,13 +391,20 @@ Separarlas evita que una llamada lenta a Gemini retrase los recordatorios o cort
                              └─ no     → YouTube → guarda en video_cache
    Si YouTube falla, la ficha se muestra igual sin videos (no se marca failed).
 3. stage=done, status=completed
-Si falla el paso 1: attempts+1, last_error, next_run_at = now() + 2^attempts minutos;
-al llegar a max_attempts → failed
+Si falla el paso 1: attempts+1, last_error, status=pending, stage=queued,
+next_run_at = now() + 2 min (tras el 1.º fallo) o + 4 min (tras el 2.º);
+al llegar a max_attempts (3 intentos en total) → failed
 ```
+
+- **Reintento automático solo de lo pasajero:** `busy` (429), `unavailable`, `invalid_response` y los fallos inesperados (`internal_error`). `rejected` (clave o modelo mal, contenido bloqueado) y `not_configured` pasan **directamente a `failed`**: volver a preguntar no ayuda y gastaría cuota. Entonces el usuario decide si pulsa **Reintentar**.
+- **Si YouTube falla** (`quota`, `unavailable`, `invalid_response`, `rejected`, `not_configured` o un fallo nuestro) la ficha se completa sin videos: **no** se marca `failed`, **no** se guarda nada en `video_cache` (el fallo no se recuerda) y **no** se reintenta por su cuenta. El siguiente concepto con esa ficha vuelve a buscar. Una búsqueda sin resultados tampoco se guarda.
+- **Consulta de YouTube:** `concept_cards.youtube_search_query`; si es nula (fichas de la 6a) se usa el `canonical_title` de la ficha.
+- **Contadores en los logs**, sin texto: `trabajo terminado alias=<hit|miss|none> videos=<hit|found|empty|error>`, y `trabajo fallido: <tipo> intento=<n> reintento=<bool>`. `alias=none` es un título sin alias (de más de 60 caracteres normalizado) o un concepto que ya traía ficha.
 
 ### 4.4 `/internal/jobs` y `/internal/cleanup`
 
-- **jobs:** toma hasta `JOBS_MAX_PER_RUN` trabajos `pending` con `next_run_at <= now()` y los procesa; los `processing` con `locked_at` de hace más de 5 min vuelven a `pending`.
+- **jobs:** toma hasta `JOBS_MAX_PER_RUN` (3) trabajos a los que ya les toca (`pending` con `next_run_at <= now()`, o `processing` abandonados desde hace más de 5 min) y los procesa **de uno en uno** con el mismo código que `/process`. **No empieza otro** si ya pasaron `JOBS_BUDGET_SECONDS` (30 s) desde que empezó la llamada: la función muere a los 60 s y un trabajo puede tardar medio minuto. Un trabajo que revienta no para a los demás. Responde solo contadores: `{ due, completed, retrying, failed, skipped }`.
+  - **Excepción documentada a la regla del `user_id`:** el reloj no tiene sesión, así que `JobQueueRepository.due()` lista los trabajos de **todos** los usuarios y devuelve solo ids. El trabajo en sí se hace luego con los repositorios de siempre y el `user_id` del trabajo.
 - **cleanup:** borra sesiones caducadas, códigos caducados, `rate_limit_events` de más de 2 días y cuentas sin verificar de más de 7 días.
 
 **Reintentar** (`POST /concepts/{id}/retry`): solo si `failed`. Reinicia el **mismo** trabajo (`status=pending`, `attempts=0`, `next_run_at=now()`) y el frontend llama a `/process` como al crearlo. Como el paso 1 se salta si ya hay ficha, reintentar nunca gasta Gemini de más.
@@ -504,11 +532,11 @@ Comprobar la contraseña actual (cambiarla o eliminar la cuenta) tiene un límit
 | Método | Ruta | Descripción |
 |---|---|---|
 | `POST` | `/concepts` | `{ title }` (1–200 caracteres, sin espacios a los lados) → 201 `{ id, status }`; 422 `validation_error`; 429 `daily_limit_reached` (con `limit` y `retry_after` hasta la medianoche local). El concepto nace en el idioma del usuario |
-| `POST` | `/concepts/{id}/process` | Genera la ficha al momento → 200 `{ status, stage, attempts }` con el estado final (`completed`, o `failed` si la IA falló), o 202 con el estado actual si ya la procesa otro. Si ya estaba resuelto, 200 sin llamar a la IA |
+| `POST` | `/concepts/{id}/process` | Genera la ficha al momento → 200 `{ status, stage, attempts }` con el estado final (`completed`, o `failed` si la IA falló), o 202 con el estado actual si ya la procesa otro o espera su turno de reintento (§4.3). Si ya estaba resuelto, 200 sin llamar a la IA. Si Gemini falla de forma pasajera, 200 con `pending`/`queued` y `attempts` ≥ 1 |
 | `GET` | `/concepts` | `q` (hasta 200), `limit` (1–50, por defecto 20), `cursor` (opaco, el `next_cursor` anterior) → `{ items, next_cursor }` por fecha descendente; cada item lleva `id`, `title`, `language`, `created_at`, `card_title` (nulo sin ficha), `status`, `stage`, `attempts`. Cursor o `limit` inválidos: 422 |
-| `GET` | `/concepts/{id}` | Lo mismo que un item, más `source`, `card` (`canonical_title`, `what_is`, `what_for`, `example`, `example_code`, `example_code_language`; nulo sin ficha) y `videos` (`[]` hasta la 6b) |
+| `GET` | `/concepts/{id}` | Lo mismo que un item, más `source`, `card` (`canonical_title`, `what_is`, `what_for`, `example`, `example_code`, `example_code_language`; nulo sin ficha) y `videos` (hasta 2: `youtube_id`, `title`, `channel` —nulo si falta—, `thumbnail_url`; `[]` si aún no hay o YouTube falló) |
 | `GET` | `/concepts/{id}/status` | `{ status, stage, attempts }` para el polling |
-| `POST` | `/concepts/{id}/retry` | Solo si `failed` (o `processing` abandonado) → 202 con el nuevo estado `pending`; 409 `not_retryable` si no; 429 `daily_limit_reached` |
+| `POST` | `/concepts/{id}/retry` | Solo si `failed` → 202 con el nuevo estado `pending`; 409 `not_retryable` si no; 429 `daily_limit_reached` |
 | `DELETE` | `/concepts/{id}` | → 200 `{ ok: true }`. Borra el concepto y su trabajo; la ficha compartida se queda. No devuelve el cupo del día |
 
 Un concepto o trabajo ajeno responde 404 `not_found` en todos estos endpoints, igual que uno inexistente. Todos los `POST` y `DELETE` exigen `X-Requested-With: compabook`.
@@ -537,7 +565,7 @@ Un concepto o trabajo ajeno responde 404 `not_found` en todos estos endpoints, i
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `POST` | `/internal/jobs` | Solo con `X-Internal-Secret` |
+| `POST` | `/internal/jobs` | Solo con `X-Internal-Secret` (sin cabecera CSRF ni sesión) → `{ due, completed, retrying, failed, skipped }` |
 | `POST` | `/internal/reminders` | Solo con `X-Internal-Secret` |
 | `POST` | `/internal/cleanup` | Solo con `X-Internal-Secret` (503 si `INTERNAL_SECRET` no está definida, 401 si falta o no coincide; no exige `X-Requested-With`, porque lo llama `pg_cron`). Borra sesiones y códigos caducados, eventos de límite de más de 2 días y cuentas sin verificar de más de 7 días; responde con cuántas filas quitó de cada cosa. Solo registra números |
 | `GET` | `/health` | Sin auth; comprueba la conexión a la base de datos |
@@ -583,6 +611,7 @@ VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:<gmail del proyecto>
 INTERNAL_SECRET=
 JOBS_MAX_PER_RUN=3
+JOBS_BUDGET_SECONDS=30           # tras estos segundos el reloj no empieza otro trabajo
 DAILY_CONCEPT_LIMIT=30
 DAILY_RETRY_LIMIT=10
 CONCEPT_TITLE_MAX=200

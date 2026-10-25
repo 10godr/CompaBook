@@ -13,11 +13,14 @@ from app.repositories import (
     ConceptAliasRepository,
     ConceptCardRepository,
     ConceptRepository,
+    JobClaim,
+    JobQueueRepository,
     NewVideo,
     VideoCacheRepository,
 )
 
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
+STALE_BEFORE = NOW - timedelta(minutes=5)  # lo que `claim_job` entiende por «abandonado»
 
 
 def add_user(orm: DbSession, email: str) -> User:
@@ -342,10 +345,10 @@ def test_reclamar_el_trabajo_lo_deja_en_processing_y_solo_una_vez(
     ana, _ = two_users
     concept = add_concept(orm, ana, "Docker")
     repository = ConceptRepository(orm, ana.id)
-    assert repository.claim_job(concept.id, NOW) is True
+    assert repository.claim_job(concept.id, NOW, STALE_BEFORE) == JobClaim(attempts=0)
     job = job_of(orm, concept)
     assert (job.status, job.stage, job.locked_at) == ("processing", "writing", NOW)
-    assert repository.claim_job(concept.id, NOW) is False  # ya no está pendiente
+    assert repository.claim_job(concept.id, NOW, STALE_BEFORE) is None  # ya lo tiene alguien
 
 
 def test_un_usuario_no_puede_tocar_el_trabajo_de_otro(
@@ -354,13 +357,13 @@ def test_un_usuario_no_puede_tocar_el_trabajo_de_otro(
     ana, beto = two_users
     concept = add_concept(orm, ana, "Docker")
     other = ConceptRepository(orm, beto.id)
-    assert other.claim_job(concept.id, NOW) is False
+    assert other.claim_job(concept.id, NOW, STALE_BEFORE) is None
     other.fail_job(concept.id, "busy", NOW)
     assert job_of(orm, concept).status == "pending"
     other.complete_job(concept.id, NOW)
     assert job_of(orm, concept).status == "pending"
     # Para probar `reset_job` el trabajo tiene que estar en otro estado: lo toma su dueña.
-    ConceptRepository(orm, ana.id).claim_job(concept.id, NOW)
+    ConceptRepository(orm, ana.id).claim_job(concept.id, NOW, STALE_BEFORE)
     other.reset_job(concept.id, NOW)
     job = job_of(orm, concept)
     assert (job.status, job.attempts, job.last_error) == ("processing", 0, None)
@@ -386,13 +389,149 @@ def test_fallar_suma_un_intento_y_guarda_solo_el_tipo_de_error(
     ana, _ = two_users
     concept = add_concept(orm, ana, "Docker")
     repository = ConceptRepository(orm, ana.id)
-    repository.claim_job(concept.id, NOW)
+    repository.claim_job(concept.id, NOW, STALE_BEFORE)
     repository.fail_job(concept.id, "busy", NOW)
     job = job_of(orm, concept)
     assert (job.status, job.attempts, job.last_error, job.locked_at) == ("failed", 1, "busy", None)
     repository.reset_job(concept.id, NOW)
     job = job_of(orm, concept)
     assert (job.status, job.stage, job.attempts, job.locked_at) == ("pending", "queued", 0, None)
+
+
+def set_job(orm: DbSession, concept: Concept, **columns: object) -> None:
+    job = job_of(orm, concept)
+    for name, value in columns.items():
+        setattr(job, name, value)
+    orm.flush()
+
+
+def test_fallar_con_reintento_deja_el_trabajo_en_cola_para_mas_tarde(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    repository = ConceptRepository(orm, ana.id)
+    repository.claim_job(concept.id, NOW, STALE_BEFORE)
+    retry_at = NOW + timedelta(minutes=2)
+    repository.fail_job(concept.id, "busy", NOW, retry_at=retry_at)
+    job = job_of(orm, concept)
+    assert (job.status, job.stage, job.attempts, job.last_error) == ("pending", "queued", 1, "busy")
+    assert (job.next_run_at, job.locked_at) == (retry_at, None)
+
+
+def test_el_trabajo_con_reintento_no_se_reclama_hasta_su_hora(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    repository = ConceptRepository(orm, ana.id)
+    set_job(orm, concept, next_run_at=NOW + timedelta(minutes=2))
+    assert repository.claim_job(concept.id, NOW, STALE_BEFORE) is None
+    assert job_of(orm, concept).status == "pending"
+    later = NOW + timedelta(minutes=2)
+    assert repository.claim_job(concept.id, later, later - timedelta(minutes=5)) is not None
+
+
+def test_un_trabajo_processing_reciente_no_se_reclama(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    set_job(orm, concept, status="processing", locked_at=NOW - timedelta(minutes=4))
+    assert ConceptRepository(orm, ana.id).claim_job(concept.id, NOW, STALE_BEFORE) is None
+    assert job_of(orm, concept).attempts == 0
+
+
+def test_un_trabajo_abandonado_se_reclama_y_ese_intento_cuenta(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    set_job(orm, concept, status="processing", attempts=1, locked_at=NOW - timedelta(minutes=6))
+    claim = ConceptRepository(orm, ana.id).claim_job(concept.id, NOW, STALE_BEFORE)
+    assert claim == JobClaim(attempts=2)
+    job = job_of(orm, concept)
+    assert (job.status, job.stage, job.attempts, job.locked_at) == ("processing", "writing", 2, NOW)
+
+
+def test_un_trabajo_abandonado_en_su_ultimo_intento_pasa_a_failed(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    set_job(orm, concept, status="processing", attempts=2, locked_at=NOW - timedelta(minutes=6))
+    assert ConceptRepository(orm, ana.id).claim_job(concept.id, NOW, STALE_BEFORE) is None
+    job = job_of(orm, concept)
+    assert (job.status, job.attempts, job.last_error, job.locked_at) == (
+        "failed",
+        3,
+        "abandoned",
+        None,
+    )
+
+
+@pytest.mark.parametrize("status", ["completed", "failed"])
+def test_un_trabajo_resuelto_no_se_reclama(
+    orm: DbSession, two_users: tuple[User, User], status: str
+) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    set_job(orm, concept, status=status)
+    assert ConceptRepository(orm, ana.id).claim_job(concept.id, NOW, STALE_BEFORE) is None
+
+
+def test_cambiar_de_etapa(orm: DbSession, two_users: tuple[User, User]) -> None:
+    ana, beto = two_users
+    concept = add_concept(orm, ana, "Docker")
+    ConceptRepository(orm, beto.id).set_stage(concept.id, "finding_videos", NOW)
+    assert job_of(orm, concept).stage == "queued"  # el de otro usuario no lo toca
+    ConceptRepository(orm, ana.id).set_stage(concept.id, "finding_videos", NOW)
+    assert job_of(orm, concept).stage == "finding_videos"
+
+
+# --- La cola del reloj ---------------------------------------------------------------------
+
+
+def test_la_cola_trae_solo_los_trabajos_a_los_que_les_toca(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, beto = two_users
+    due = add_concept(orm, ana, "uno")
+    waiting = add_concept(orm, beto, "espera")
+    stale = add_concept(orm, beto, "abandonado")
+    fresh = add_concept(orm, ana, "en curso")
+    done = add_concept(orm, ana, "listo")
+    failed = add_concept(orm, beto, "fallido")
+    set_job(orm, waiting, next_run_at=NOW + timedelta(minutes=2))
+    set_job(orm, stale, status="processing", locked_at=NOW - timedelta(minutes=6))
+    set_job(orm, fresh, status="processing", locked_at=NOW - timedelta(minutes=4))
+    set_job(orm, done, status="completed")
+    set_job(orm, failed, status="failed")
+    found = JobQueueRepository(orm).due(NOW, STALE_BEFORE, 10)
+    assert {(job.concept_id, job.user_id) for job in found} == {
+        (due.id, ana.id),
+        (stale.id, beto.id),
+    }
+
+
+def test_la_cola_empieza_por_el_mas_atrasado_y_respeta_el_limite(
+    orm: DbSession, two_users: tuple[User, User]
+) -> None:
+    ana, _ = two_users
+    concepts = [add_concept(orm, ana, f"c{n}") for n in range(4)]
+    for minutes, concept in zip((30, 10, 20, 40), concepts, strict=True):
+        set_job(orm, concept, next_run_at=NOW - timedelta(minutes=minutes))
+    found = JobQueueRepository(orm).due(NOW, STALE_BEFORE, 3)
+    assert [job.concept_id for job in found] == [concepts[3].id, concepts[0].id, concepts[2].id]
+
+
+def test_la_cola_no_bloquea_los_trabajos(orm: DbSession, two_users: tuple[User, User]) -> None:
+    ana, _ = two_users
+    concept = add_concept(orm, ana, "Docker")
+    JobQueueRepository(orm).due(NOW, STALE_BEFORE, 10)
+    # El reloj solo mira: quien los procesa los reclama después con `claim_job`.
+    assert job_of(orm, concept).status == "pending"
+    assert ConceptRepository(orm, ana.id).claim_job(concept.id, NOW, STALE_BEFORE) is not None
 
 
 # --- Alias ---------------------------------------------------------------------------------
