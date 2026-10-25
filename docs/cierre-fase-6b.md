@@ -1,6 +1,6 @@
 # Cierre de la Fase 6b: cola, videos y fichas compartidas
 
-Cerrada en código el 2026-10-25. Entregada en los PR #30 a #34. Verificada en local con **Gemini y YouTube reales** (un recorrido en Chrome de 45 comprobaciones y una prueba de la capa de trabajos). La verificación en producción está **parcial**: ver «Verificación en producción».
+Cerrada en código el 2026-10-25. Entregada en los PR #30 a #34. Verificada en local con **Gemini y YouTube reales** (un recorrido en Chrome de 45 comprobaciones y una prueba de la capa de trabajos). Verificada en producción por Emile el 2026-10-25, salvo un trabajo largo que aún no se ha dado: ver «Verificación en producción».
 
 ## Qué entrega
 
@@ -83,14 +83,14 @@ Variables del backend (Vercel en Production y Preview, y `backend/.env` en local
 Hecho:
 - Migración `0004` aplicada en `compabook-prod` (confirmado por Emile).
 - Tarea `compabook-jobs` creada en Supabase (confirmado por Emile).
+- Las dos consultas del reloj (`cron.job_run_details` y `net._http_response`) y un concepto nuevo en `https://compabook.vercel.app` con sus 2 videos: Emile los probó el 2026-10-25 y no dieron ningún error.
 
-**Pendiente de anotar** (todavía no se ha reportado el resultado):
-1. `select status, return_message, start_time from cron.job_run_details where jobid = (select jobid from cron.job where jobname = 'compabook-jobs') order by start_time desc limit 5;` → `succeeded`.
-2. `select status_code, timed_out, content, created from net._http_response order by created desc limit 5;` → `status_code = 200`, `timed_out = false` y `content` con los cinco contadores.
-3. Crear un concepto nuevo en `https://compabook.vercel.app`: debe pasar por «En cola» → «Escribiendo» → «Buscando videos» y terminar con **2 videos** cuyo clic abra YouTube.
-4. Escribir el mismo concepto de otra forma y comprobar que sale más rápido y con los mismos videos.
-5. **Un trabajo largo de verdad** (cuando Gemini dé 503 en el principal y conteste el respaldo): comprobar que `net._http_response` sigue en 200 y no en timeout. Puede tardar en darse; no hay que forzarlo.
-6. En los registros de Vercel solo deben verse líneas `gemini model=… outcome=…`, `trabajo terminado alias=… videos=…` y `jobs: {…}`, sin ningún concepto.
+**Pendiente:**
+- **Un trabajo largo de verdad** (cuando Gemini dé 503 en el principal y conteste el respaldo): comprobar que `net._http_response` sigue en `status_code = 200` y no en timeout. Puede tardar en darse; no hay que forzarlo, y hasta ahora no ha dado error.
+
+**No se reportó expresamente** (conviene mirarlo la próxima vez que se entre a Supabase y a Vercel):
+- Escribir un concepto de otra forma y ver que sale más rápido con los mismos videos.
+- En los registros de Vercel solo deben verse líneas `gemini model=… outcome=…`, `trabajo terminado alias=… videos=…` y `jobs: {…}`, sin ningún concepto.
 
 ## Criterios de aceptación de la 6b (`diseno-tecnico.md` §11)
 
@@ -103,11 +103,11 @@ Hecho:
 | Un título de más de 60 caracteres normalizados no crea alias | ✅ |
 | Si se cierra la pestaña a mitad, la ficha se completa gracias al reloj | ✅ En pruebas y local (`POST /internal/jobs`); falta verlo con `pg_cron` en producción |
 | Un fallo muestra **Reintentar** y funciona; si la ficha ya existía, no se llama a Gemini | ✅ (los fallos pasajeros ahora se reintentan solos antes de llegar ahí) |
-| Prueba de concepto: `pg_cron` llama a `/internal/jobs` en producción y queda en los logs | ➡ Pendiente de anotar el resultado (ver arriba) |
+| Prueba de concepto: `pg_cron` llama a `/internal/jobs` en producción y queda en los logs | ✅ Probado en producción por Emile, sin errores; falta un trabajo largo (ver arriba) |
 
 ## Pendientes
 
-- **Verificación en producción** de la sección anterior, en especial `status_code = 200` con un trabajo largo.
+- **Verificación en producción:** `status_code = 200` con un trabajo largo (el único punto abierto de la sección anterior).
 - **Cuotas:** YouTube da unas 100 búsquedas al día para todos; vigilar el uso cuando haya más usuarios. Anotar el cupo de `gemini-3.5-flash` cuando aparezca en AI Studio y volver a probar `gemini-3.8-flash` en unos días.
 - **Fichas duplicadas entre conceptos vecinos** (CI vs CI/CD, containers vs Docker): es un coste, no un error. Si molesta, se puede fusionar a posteriori; no se hizo (decisión 6).
 - **Migraciones fuera de local:** se siguen aplicando a mano en el editor de Supabase.
