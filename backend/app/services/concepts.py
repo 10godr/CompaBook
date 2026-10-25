@@ -166,6 +166,7 @@ def process_concept(
             example=content.example,
             example_code=content.example_code,
             example_code_language=content.example_code_language,
+            youtube_search_query=content.youtube_search_query,
             model=generated.model,
             now=now,
         )
