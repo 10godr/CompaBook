@@ -12,7 +12,8 @@ from app.main import app
 from app.services import accounts, concepts
 from app.services.ai import get_ai_provider
 from app.services.email import get_email_provider
-from tests.helpers import NOW, FakeAIProvider, FakeEmailProvider
+from app.services.youtube import get_video_provider
+from tests.helpers import NOW, FakeAIProvider, FakeEmailProvider, FakeVideoProvider
 
 
 @pytest.fixture
@@ -47,6 +48,11 @@ def ai() -> FakeAIProvider:
 
 
 @pytest.fixture
+def youtube() -> FakeVideoProvider:
+    return FakeVideoProvider()
+
+
+@pytest.fixture
 def clock(monkeypatch: pytest.MonkeyPatch) -> dict[str, datetime]:
     """Reloj controlable: `clock["now"] = ...` adelanta o atrasa el tiempo de los servicios."""
     state = {"now": NOW}
@@ -60,6 +66,7 @@ def client(
     orm: DbSession,
     mailer: FakeEmailProvider,
     ai: FakeAIProvider,
+    youtube: FakeVideoProvider,
     clock: dict[str, datetime],
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[TestClient]:
@@ -69,5 +76,6 @@ def client(
     app.dependency_overrides[get_db] = lambda: orm
     app.dependency_overrides[get_email_provider] = lambda: mailer
     app.dependency_overrides[get_ai_provider] = lambda: ai
+    app.dependency_overrides[get_video_provider] = lambda: youtube
     yield TestClient(app)
     app.dependency_overrides.clear()

@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.models import AllowedEmail, User
 from app.services.ai import CardContent, GeneratedCard, normalize_slug
 from app.services.email import EmailMessage
+from app.services.youtube import Video
 
 HEADERS = {"X-Requested-With": "compabook"}
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
@@ -57,6 +58,28 @@ class FakeAIProvider:
         if self.error:
             raise self.error
         return GeneratedCard(self.cards.get(title) or make_content(title), "modelo-falso")
+
+
+def make_videos() -> list[Video]:
+    return [
+        Video(f"abcdefghij{n}", f"Video {n}", f"Canal {n}", f"https://i.ytimg.com/vi/{n}/hq.jpg")
+        for n in (1, 2)
+    ]
+
+
+class FakeVideoProvider:
+    """YouTube falso: cuenta las búsquedas y devuelve 2 videos fijos o lanza el error pedido."""
+
+    def __init__(self) -> None:
+        self.calls: list[tuple[str, str]] = []  # (consulta, idioma) de cada búsqueda
+        self.error: Exception | None = None
+        self.videos: list[Video] = make_videos()
+
+    def search(self, query: str, language: str) -> list[Video]:
+        self.calls.append((query, language))
+        if self.error:
+            raise self.error
+        return self.videos
 
 
 def invite(orm: DbSession, email: str = EMAIL) -> None:

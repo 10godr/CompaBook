@@ -16,6 +16,7 @@ from tests.helpers import (
     NOW,
     FakeAIProvider,
     FakeEmailProvider,
+    FakeVideoProvider,
     invite,
     make_content,
     register,
@@ -181,7 +182,11 @@ def test_las_escrituras_exigen_la_cabecera_csrf(client: TestClient, ana: str) ->
 
 
 def test_procesar_guarda_la_ficha_y_completa_el_trabajo(
-    client: TestClient, orm: DbSession, ana: str, ai: FakeAIProvider
+    client: TestClient,
+    orm: DbSession,
+    ana: str,
+    ai: FakeAIProvider,
+    youtube: FakeVideoProvider,
 ) -> None:
     concept_id = create(client, ana, "CI/CD").json()["id"]
     response = process(client, ana, concept_id)
@@ -192,7 +197,9 @@ def test_procesar_guarda_la_ficha_y_completa_el_trabajo(
     assert detail["card"]["what_is"] == "Qué es."
     assert detail["card"]["canonical_title"] == "CI/CD"
     assert detail["card_title"] == "CI/CD"
-    assert detail["videos"] == []
+    assert [video["youtube_id"] for video in detail["videos"]] == ["abcdefghij1", "abcdefghij2"]
+    assert set(detail["videos"][0]) == {"youtube_id", "title", "channel", "thumbnail_url"}
+    assert len(youtube.calls) == 1
     assert job_row(orm, concept_id).locked_at is None
 
 
@@ -270,10 +277,10 @@ def test_el_trabajo_se_reclama_y_confirma_antes_de_llamar_a_la_ia(
     assert seen == {"in_transaction": False, "status": "processing"}
 
 
-def test_si_la_ia_falla_el_concepto_queda_guardado_y_el_trabajo_failed(
+def test_si_la_ia_se_niega_el_concepto_queda_guardado_y_el_trabajo_failed(
     client: TestClient, orm: DbSession, ana: str, ai: FakeAIProvider
 ) -> None:
-    ai.error = AIError("busy")
+    ai.error = AIError("rejected")  # no se reintenta solo: volver a preguntar no ayudaría
     concept_id = create(client, ana).json()["id"]
     response = process(client, ana, concept_id)
     assert response.status_code == 200
@@ -281,28 +288,33 @@ def test_si_la_ia_falla_el_concepto_queda_guardado_y_el_trabajo_failed(
     assert count(orm, "concepts") == 1
     assert count(orm, "concept_cards") == 0
     row = job_row(orm, concept_id)
-    assert (row.status, row.last_error, row.locked_at) == ("failed", "busy", None)
+    assert (row.status, row.last_error, row.locked_at) == ("failed", "rejected", None)
     assert get(client, ana, f"/{concept_id}").json()["card"] is None
     assert [item["id"] for item in get(client, ana).json()["items"]] == [concept_id]
 
 
-def test_una_respuesta_invalida_de_la_ia_no_guarda_ficha(
+def test_una_respuesta_invalida_de_la_ia_no_guarda_ficha_y_se_reintenta(
     client: TestClient, orm: DbSession, ana: str, ai: FakeAIProvider
 ) -> None:
     ai.error = AIError("invalid_response")
     concept_id = create(client, ana).json()["id"]
-    assert process(client, ana, concept_id).json()["status"] == "failed"
+    assert process(client, ana, concept_id).json() == {
+        "status": "pending",
+        "stage": "queued",
+        "attempts": 1,
+    }
     assert count(orm, "concept_cards") == 0
     assert job_row(orm, concept_id).last_error == "invalid_response"
 
 
-def test_un_fallo_inesperado_tambien_deja_el_trabajo_failed(
+def test_un_fallo_inesperado_no_deja_el_trabajo_colgado(
     client: TestClient, orm: DbSession, ana: str, ai: FakeAIProvider
 ) -> None:
     ai.error = RuntimeError("algo raro")
     concept_id = create(client, ana).json()["id"]
-    assert process(client, ana, concept_id).json()["status"] == "failed"
-    assert job_row(orm, concept_id).last_error == "internal_error"
+    assert process(client, ana, concept_id).json()["status"] == "pending"
+    row = job_row(orm, concept_id)
+    assert (row.last_error, row.locked_at) == ("internal_error", None)
 
 
 def test_el_mismo_slug_comparte_una_sola_ficha(
@@ -333,7 +345,7 @@ def test_el_estado_solo_trae_status_stage_y_attempts(client: TestClient, ana: st
 # --- Trabajo abandonado ---
 
 
-def test_un_trabajo_processing_abandonado_se_informa_como_failed(
+def test_un_trabajo_processing_abandonado_se_informa_como_en_cola(
     client: TestClient, orm: DbSession, clock: dict[str, datetime], ana: str, ai: FakeAIProvider
 ) -> None:
     concept_id = create(client, ana).json()["id"]
@@ -341,22 +353,25 @@ def test_un_trabajo_processing_abandonado_se_informa_como_failed(
     clock["now"] = NOW + timedelta(minutes=4)
     assert get(client, ana, f"/{concept_id}/status").json()["status"] == "processing"
     clock["now"] = NOW + timedelta(minutes=6)
-    assert get(client, ana, f"/{concept_id}/status").json()["status"] == "failed"
-    assert get(client, ana, f"/{concept_id}").json()["status"] == "failed"
-    assert get(client, ana).json()["items"][0]["status"] == "failed"
-    # /process no lo retoma: hay que reintentar.
-    assert process(client, ana, concept_id).json()["status"] == "failed"
+    queued = {"status": "pending", "stage": "queued", "attempts": 0}
+    assert get(client, ana, f"/{concept_id}/status").json() == queued
+    assert get(client, ana, f"/{concept_id}").json()["status"] == "pending"
+    assert get(client, ana).json()["items"][0]["status"] == "pending"
+    # No hay que reintentar a mano: no está fallido.
+    assert retry(client, ana, concept_id).status_code == 409
     assert ai.calls == []
 
 
-def test_reintentar_un_trabajo_abandonado_lo_deja_en_cola_y_se_procesa(
+def test_process_rescata_un_trabajo_abandonado(
     client: TestClient, orm: DbSession, clock: dict[str, datetime], ana: str, ai: FakeAIProvider
 ) -> None:
     concept_id = create(client, ana).json()["id"]
     set_job(orm, concept_id, status="processing", stage="writing", locked_at=NOW)
     clock["now"] = NOW + timedelta(minutes=6)
-    assert retry(client, ana, concept_id).status_code == 202
-    assert process(client, ana, concept_id).json()["status"] == "completed"
+    response = process(client, ana, concept_id)
+    assert response.status_code == 200
+    # El intento abandonado cuenta: el trabajo termina, pero consta que ya iba por el segundo.
+    assert response.json() == {"status": "completed", "stage": "done", "attempts": 1}
     assert len(ai.calls) == 1
 
 
@@ -366,7 +381,7 @@ def test_reintentar_un_trabajo_abandonado_lo_deja_en_cola_y_se_procesa(
 def test_reintentar_tras_un_fallo_reinicia_el_mismo_trabajo(
     client: TestClient, orm: DbSession, ana: str, ai: FakeAIProvider
 ) -> None:
-    ai.error = AIError("unavailable")
+    ai.error = AIError("rejected")
     concept_id = create(client, ana).json()["id"]
     process(client, ana, concept_id)
     response = retry(client, ana, concept_id)
@@ -404,7 +419,7 @@ def test_los_reintentos_tienen_limite_diario(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, ana: str, ai: FakeAIProvider
 ) -> None:
     monkeypatch.setattr(get_settings(), "daily_retry_limit", 2)
-    ai.error = AIError("busy")
+    ai.error = AIError("rejected")
     concept_id = create(client, ana).json()["id"]
     for _ in range(2):
         process(client, ana, concept_id)

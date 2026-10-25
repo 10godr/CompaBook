@@ -1,7 +1,7 @@
-"""Conceptos: crear, procesar con la IA, reintentar y los límites diarios (diseno-tecnico.md §4).
+"""Conceptos: crear, estado, reintentar y los límites diarios (diseno-tecnico.md §4).
 
 Regla central: el concepto se guarda ANTES de llamar a la IA. Si Gemini falla, el usuario
-conserva lo que escribió y puede reintentar.
+conserva lo que escribió y puede reintentar. Procesar un trabajo está en `services/jobs.py`.
 """
 
 import logging
@@ -15,8 +15,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.config import get_settings
 from app.errors import ApiError
 from app.models import Concept, User
-from app.repositories import ConceptCardRepository, ConceptRepository, RateLimitRepository
-from app.services.ai import AIError, AIProvider
+from app.repositories import ConceptRepository, RateLimitRepository
 
 logger = logging.getLogger("compabook.concepts")
 
@@ -88,12 +87,20 @@ def _check_daily_limit(db: DbSession, user: User, bucket: str, limit: int, now: 
 
 
 def job_state(concept: Concept, now: datetime) -> dict[str, object]:
-    """`status`, `stage` y `attempts`; un trabajo `processing` abandonado cuenta como `failed`."""
+    """`status`, `stage` y `attempts`; un trabajo `processing` abandonado se ve como en cola.
+
+    Nadie lo está haciendo, pero el reloj (o un `/process`) lo recogerá solo: el usuario no
+    tiene que pulsar Reintentar.
+    """
     job = concept.job
-    status = job.status
-    if status == "processing" and job.locked_at and now - job.locked_at > STALE_AFTER:
-        status = "failed"
-    return {"status": status, "stage": job.stage, "attempts": job.attempts}
+    abandoned = (
+        job.status == "processing"
+        and job.locked_at is not None
+        and now - job.locked_at > STALE_AFTER
+    )
+    if abandoned:
+        return {"status": "pending", "stage": "queued", "attempts": job.attempts}
+    return {"status": job.status, "stage": job.stage, "attempts": job.attempts}
 
 
 # --- Crear ----------------------------------------------------------------------------------
@@ -117,86 +124,19 @@ def create_concept(db: DbSession, user: User, title: str, now: datetime | None =
     return concept
 
 
-# --- Procesar -------------------------------------------------------------------------------
+# --- Reintentar ----------------------------------------------------------------------------
 
 
-def process_concept(
-    db: DbSession,
-    ai: AIProvider,
-    user: User,
-    concept_id: uuid.UUID,
-    now: datetime | None = None,
-) -> tuple[dict[str, object], bool]:
-    """Genera la ficha. Devuelve el estado y si esta petición lo terminó (False → responder 202).
-
-    No se mantiene abierta ninguna transacción mientras se espera a Gemini: se reclama el
-    trabajo y se confirma, se llama a la IA y la ficha se guarda en otra transacción.
-    """
-    now = now or utcnow()
-    concepts = ConceptRepository(db, user.id)
-    concept = concepts.get(concept_id)
-    if concept is None:
-        raise _not_found()
-    state = job_state(concept, now)
-    if state["status"] != "pending":
-        # `processing` vigente: otro proceso lo está haciendo. Lo demás ya está resuelto.
-        return state, state["status"] != "processing"
-    # Se copia lo necesario antes de confirmar y de la llamada larga.
-    title, language, has_card = concept.title, concept.language, concept.card_id is not None
-    if not concepts.claim_job(concept_id, now):
-        db.rollback()
-        return job_state(_reload(concepts, concept_id), now), False
-    db.commit()
-
-    if not has_card:
-        try:
-            generated = ai.generate_card(title, language)
-        except AIError as error:
-            return _fail(db, concepts, concept_id, error.kind, now)
-        except Exception as error:  # un fallo nuestro no debe dejar el trabajo colgado
-            logger.error("fallo inesperado al generar la ficha: %s", type(error).__name__)
-            return _fail(db, concepts, concept_id, "internal_error", now)
-        content = generated.content
-        card, _ = ConceptCardRepository(db).insert_if_absent(
-            canonical_title=content.canonical_title,
-            cache_slug=content.cache_slug,
-            language=language,
-            what_is=content.what_is,
-            what_for=content.what_for,
-            example=content.example,
-            example_code=content.example_code,
-            example_code_language=content.example_code_language,
-            youtube_search_query=content.youtube_search_query,
-            model=generated.model,
-            now=now,
-        )
-        concepts.attach_card(concept_id, card.id)
-    concepts.complete_job(concept_id, now)
-    db.commit()
-    return job_state(_reload(concepts, concept_id), now), True
-
-
-def _reload(concepts: ConceptRepository, concept_id: uuid.UUID) -> Concept:
+def reload_concept(concepts: ConceptRepository, concept_id: uuid.UUID) -> Concept:
     concept = concepts.get(concept_id)
     assert concept is not None  # acabamos de leerlo; si lo borraron en medio, es un 500 honesto
     return concept
 
 
-def _fail(
-    db: DbSession, concepts: ConceptRepository, concept_id: uuid.UUID, kind: str, now: datetime
-) -> tuple[dict[str, object], bool]:
-    concepts.fail_job(concept_id, kind, now)
-    db.commit()
-    return job_state(_reload(concepts, concept_id), now), True
-
-
-# --- Reintentar -----------------------------------------------------------------------------
-
-
 def retry_concept(
     db: DbSession, user: User, concept_id: uuid.UUID, now: datetime | None = None
 ) -> dict[str, object]:
-    """Deja en cola un trabajo fallido (o abandonado). El frontend llama a /process después."""
+    """Deja en cola un trabajo fallido. El frontend llama a /process después."""
     now = now or utcnow()
     concepts = ConceptRepository(db, user.id)
     concept = concepts.get(concept_id)
@@ -208,4 +148,4 @@ def retry_concept(
     RateLimitRepository(db).add(BUCKET_RETRY, str(user.id), now)
     concepts.reset_job(concept_id, now)
     db.commit()
-    return job_state(_reload(concepts, concept_id), now)
+    return job_state(reload_concept(concepts, concept_id), now)
