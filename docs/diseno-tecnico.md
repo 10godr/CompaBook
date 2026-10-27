@@ -278,24 +278,24 @@ processing_jobs (                    -- un trabajo por concepto
   created_at, updated_at timestamptz
 )
 
-reminder_settings (
+reminder_settings (                  -- una fila por usuario, creada al guardar (sin fila: valores por defecto)
   user_id      uuid pk references users on delete cascade,
   enabled      boolean not null default false,
   local_time   time not null default '20:00',
-  weekdays     smallint[] not null default '{1,2,3,4,5,6,7}',  -- ISO: 1=lunes … 7=domingo
+  weekdays     smallint[] not null default '{1,2,3,4,5,6,7}',  -- ISO: 1=lunes … 7=domingo; check: de 1 a 7 y al menos uno
   last_sent_on date,                 -- fecha local del último envío (evita duplicados)
   updated_at   timestamptz
 )
 
 push_subscriptions (
   id         uuid pk,
-  user_id    uuid references users on delete cascade,
-  endpoint   text unique not null,
-  p256dh     text not null,
-  auth       text not null,
-  user_agent text,
+  user_id    uuid not null references users on delete cascade,
+  endpoint   text unique not null,   -- identifica al DISPOSITIVO; check: 1–2048 caracteres
+  p256dh     text not null,          -- check: 1–512
+  auth       text not null,          -- check: 1–512
+  user_agent text,                   -- check: ≤ 512
   active     boolean not null default true,
-  created_at timestamptz
+  created_at timestamptz             -- cuándo se (re)registró el dispositivo
 )
 
 api_tokens (                         -- atajo de Siri
@@ -309,7 +309,9 @@ api_tokens (                         -- atajo de Siri
 )
 ```
 
-Índices: `concepts (user_id, created_at desc)`, `processing_jobs (status, next_run_at)`, `sessions (expires_at)`, `rate_limit_events (bucket, key, created_at)`.
+Índices: `concepts (user_id, created_at desc)`, `processing_jobs (status, next_run_at)`, `sessions (expires_at)`, `rate_limit_events (bucket, key, created_at)`, `push_subscriptions (user_id, active)`.
+
+**Dispositivos de push.** El `endpoint` es único en toda la tabla porque identifica al dispositivo, no a la persona. Al suscribirse, si el dispositivo ya estaba registrado a otro usuario **pasa al usuario actual** (si no, los avisos del anterior —con títulos de sus conceptos— saldrían en la pantalla de otra persona). Volver a suscribirse reactiva el dispositivo y refresca `created_at`. Cada usuario conserva como máximo **5** dispositivos: se descartan primero los inactivos y luego los registrados hace más tiempo, nunca el que se acaba de registrar.
 
 La búsqueda del Cuaderno es un `ILIKE` sobre `concepts.title` **filtrado por usuario** (con `%`, `_` y `\` escapados), sin `pg_trgm`: con cientos de conceptos por usuario no hace falta un índice de texto, y se evita activar otra extensión en producción. Si el Cuaderno creciera mucho, se añade entonces.
 
