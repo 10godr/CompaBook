@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session as DbSession
 from app.models import AllowedEmail, User
 from app.services.ai import CardContent, GeneratedCard, normalize_slug
 from app.services.email import EmailMessage
+from app.services.push import PushError, PushMessage, PushTarget
 from app.services.youtube import Video
 
 HEADERS = {"X-Requested-With": "compabook"}
@@ -31,6 +32,22 @@ class FakeEmailProvider:
         match = re.search(r"\b(\d{6})\b", self.sent[-1].body)
         assert match, "el correo no lleva código"
         return match.group(1)
+
+
+class FakePushProvider:
+    """Push falso: anota cada envío y falla con el error que se le pida (uno o todos)."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[PushTarget, PushMessage]] = []
+        self.error: PushError | None = None  # falla todos los envíos
+        self.errors: dict[str, PushError] = {}  # falla los de un endpoint concreto
+
+    def send(self, target: PushTarget, message: PushMessage) -> None:
+        if self.error:
+            raise self.error
+        if target.endpoint in self.errors:
+            raise self.errors[target.endpoint]
+        self.sent.append((target, message))
 
 
 def make_content(title: str = "CI/CD", **override: object) -> CardContent:

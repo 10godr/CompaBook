@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     youtube_api_key: str | None = None
     youtube_timeout_seconds: float = 10.0
 
+    # Espera máxima por envío a un servicio de push (Apple, Google, Mozilla, Microsoft).
+    push_timeout_seconds: float = 10.0
+
     # El reloj (/internal/jobs): cuántos trabajos por llamada, y los segundos tras los cuales no
     # empieza otro (la función de Vercel muere a los 60 s).
     jobs_max_per_run: int = 3

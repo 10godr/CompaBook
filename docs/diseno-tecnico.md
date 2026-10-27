@@ -62,7 +62,10 @@ Se llama por **REST con `httpx`** (`POST .../models/{modelo}:generateContent`), 
 ### 1.6 Web Push
 
 - Claves **VAPID**; la pública va al frontend y la privada solo al backend.
-- Envío con `pywebpush`. Si un envío devuelve 404/410, la suscripción se marca inactiva.
+- Envío con `pywebpush` detrás de `PushProvider` (`WebPushProvider` en producción, uno falso en los tests). Si un envío devuelve 404/410, la suscripción se marca inactiva.
+- Un fallo del envío solo guarda su **tipo**: `expired` (404/410), `unavailable` (429, 5xx, red o tiempo agotado: se puede reintentar), `rejected` (el servicio lo rechazó: otro 4xx, clave mal formada, destino no permitido) o `not_configured` (sin claves VAPID). Nunca se registra el endpoint, las claves ni el texto del aviso.
+- Solo se envía a servicios de push conocidos (§7, `POST /push/subscriptions`); el proveedor lo vuelve a comprobar antes de hacer la petición.
+- El aviso lleva `title`, `body`, `url` (ruta de la web que se abre al tocarlo) y `tag` (los avisos con la misma etiqueta se sustituyen). El `ttl` es lo que el servicio de push guarda el aviso si el dispositivo está apagado: 60 s en el de prueba.
 - Funciona en iPhone (PWA instalada, iOS 16.4+) y en Android (Chrome); ambos se probaron con el mismo código de envío.
 
 ---
@@ -547,12 +550,12 @@ Un concepto o trabajo ajeno responde 404 `not_found` en todos estos endpoints, i
 
 | Método | Ruta | Descripción |
 |---|---|---|
-| `GET` | `/reminders` | Ajustes actuales |
-| `PUT` | `/reminders` | `{ enabled, local_time, weekdays[] }` |
-| `GET` | `/push/vapid-public-key` | Sin auth |
-| `POST` | `/push/subscriptions` | `{ endpoint, keys: { p256dh, auth } }` |
-| `DELETE` | `/push/subscriptions` | `{ endpoint }` |
-| `POST` | `/push/test` | Notificación de prueba |
+| `GET` | `/reminders` | → `{ enabled, local_time: "HH:MM", weekdays[], timezone, devices }`. Sin ajustes guardados: apagado, `20:00`, todos los días. `devices` es cuántos dispositivos activos tiene la cuenta |
+| `PUT` | `/reminders` | `{ enabled, local_time: "HH:MM", weekdays[1–7, al menos uno], timezone? }` → lo mismo que `GET`. Los días se guardan ordenados y sin repetir. Si llega `timezone` (la del dispositivo, validada) y cambió, **actualiza `users.timezone`**. No toca `last_sent_on`. 422 si la hora no es `HH:MM`, los días no valen o la zona no existe |
+| `GET` | `/push/vapid-public-key` | Sin auth → `{ public_key }`. 503 `push_unavailable` si no está configurada |
+| `POST` | `/push/subscriptions` | `{ endpoint, keys: { p256dh, auth } }` → `{ ok: true }`. 422 si el `endpoint` no es https de Apple, Google, Mozilla o Microsoft (el servidor hace una petición a esa URL). Si el dispositivo estaba a nombre de otro usuario, **pasa a este**. Máximo 5 dispositivos por usuario |
+| `DELETE` | `/push/subscriptions` | `{ endpoint }` → `{ ok: true }`. 404 si no es un dispositivo de este usuario (igual que uno inexistente) |
+| `POST` | `/push/test` | `{ endpoint? }` → `{ sent, expired, failed }`. Sin `endpoint`, avisa a todos los dispositivos del usuario; con uno, solo a ese (404 si no es suyo o está inactivo). 409 `no_devices` si no hay ninguno, 429 `rate_limited` al pasar de **5 por hora** y usuario, 503 `push_unavailable` sin claves VAPID. Un 404/410 del servicio de push da de baja el dispositivo |
 
 ### Siri
 
@@ -611,6 +614,7 @@ EMAIL_FROM_NAME=CompaBook
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:<gmail del proyecto>
+PUSH_TIMEOUT_SECONDS=10          # espera máxima por envío a un servicio de push
 INTERNAL_SECRET=
 JOBS_MAX_PER_RUN=3
 JOBS_BUDGET_SECONDS=30           # tras estos segundos el reloj no empieza otro trabajo
