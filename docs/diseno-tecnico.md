@@ -381,6 +381,27 @@ select cron.schedule(
 
 Para pararla: `select cron.unschedule('compabook-jobs');`. Dos llamadas solapadas no se pisan: cada trabajo se reclama con `FOR UPDATE SKIP LOCKED`.
 
+La tarea de recordatorios es igual, con otra URL y otro nombre. Una llamada tarda mucho menos (casi siempre milisegundos), pero en el peor caso (`REMINDERS_BUDGET_SECONDS` + los envíos del último usuario) se acerca a la mitad de lo que aguanta la función, y `timeout_milliseconds` evita que `pg_net` la corte a los 5 s:
+
+```sql
+select cron.schedule(
+  'compabook-reminders',
+  '* * * * *',
+  $$
+  select net.http_post(
+    url     := 'https://compabook.vercel.app/api/v1/internal/reminders',
+    headers := jsonb_build_object(
+      'Content-Type', 'application/json',
+      'X-Internal-Secret', (select decrypted_secret from vault.decrypted_secrets where name = 'internal_secret')
+    ),
+    timeout_milliseconds := 58000
+  );
+  $$
+);
+```
+
+Para pararla: `select cron.unschedule('compabook-reminders');`.
+
 ### 4.3 Procesar un trabajo
 
 ```
@@ -406,10 +427,12 @@ al llegar a max_attempts (3 intentos en total) → failed
 - **Consulta de YouTube:** `concept_cards.youtube_search_query`; si es nula (fichas de la 6a) se usa el `canonical_title` de la ficha.
 - **Contadores en los logs**, sin texto: `trabajo terminado alias=<hit|miss|none> videos=<hit|found|empty|error>`, y `trabajo fallido: <tipo> intento=<n> reintento=<bool>`. `alias=none` es un título sin alias (de más de 60 caracteres normalizado) o un concepto que ya traía ficha.
 
-### 4.4 `/internal/jobs` y `/internal/cleanup`
+### 4.4 `/internal/jobs`, `/internal/reminders` y `/internal/cleanup`
 
 - **jobs:** toma hasta `JOBS_MAX_PER_RUN` (3) trabajos a los que ya les toca (`pending` con `next_run_at <= now()`, o `processing` abandonados desde hace más de 5 min) y los procesa **de uno en uno** con el mismo código que `/process`. **No empieza otro** si ya pasaron `JOBS_BUDGET_SECONDS` (30 s) desde que empezó la llamada: la función muere a los 60 s y un trabajo puede tardar medio minuto. Un trabajo que revienta no para a los demás. Responde solo contadores: `{ due, completed, retrying, failed, skipped }`.
   - **Excepción documentada a la regla del `user_id`:** el reloj no tiene sesión, así que `JobQueueRepository.due()` lista los trabajos de **todos** los usuarios y devuelve solo ids. El trabajo en sí se hace luego con los repositorios de siempre y el `user_id` del trabajo.
+- **reminders:** ver §4.6. Calcula quién está en su hora (con su zona horaria), avisa a hasta `REMINDERS_MAX_PER_RUN` (30) usuarios, a quien lleva más tiempo esperando primero, y **no empieza con otro** pasados `REMINDERS_BUDGET_SECONDS` (25 s): cada usuario puede tardar hasta 5 envíos de `PUSH_TIMEOUT_SECONDS` (5 s), y la función muere a los 60 s. A quien quede sin atender le toca en la siguiente ejecución, mientras siga dentro de su ventana de 2 h. Un usuario con problemas no para a los demás. Responde solo contadores: `{ checked, due, sent, retrying, failed, skipped }`.
+  - **Excepción documentada a la regla del `user_id`:** `ReminderQueueRepository.candidates()` lista los ajustes de **todos** los usuarios con recordatorio activo y algún dispositivo (sin cuentas suspendidas) y no devuelve nada de sus conceptos. El aviso se manda luego con los repositorios de siempre y el `user_id` de cada uno.
 - **cleanup:** borra sesiones caducadas, códigos caducados, `rate_limit_events` de más de 2 días y cuentas sin verificar de más de 7 días.
 
 **Reintentar** (`POST /concepts/{id}/retry`): solo si `failed`. Reinicia el **mismo** trabajo (`status=pending`, `attempts=0`, `next_run_at=now()`) y el frontend llama a `/process` como al crearlo. Como el paso 1 se salta si ya hay ficha, reintentar nunca gasta Gemini de más.
@@ -433,15 +456,23 @@ El frontend consulta `GET /concepts/{id}/status` cada 2 s mientras el trabajo es
 
 ### 4.6 Recordatorios
 
-En cada ejecución de `/internal/reminders`, la consulta selecciona solo usuarios con `enabled = true` y al menos una suscripción activa. Para cada uno:
+En cada ejecución de `/internal/reminders`, la consulta selecciona solo usuarios con `enabled = true`, la cuenta no suspendida y al menos un dispositivo activo. Para cada uno:
 
 1. Calcular la fecha y hora **locales** con `users.timezone`.
-2. Enviar si: el día de la semana está en `weekdays`, la hora local está entre `local_time` y `local_time + 2 h`, y `last_sent_on` ≠ hoy (local).
-3. Elegir un concepto al azar con ficha completada; si no hay ninguno, no enviar.
-4. Mensaje (en su idioma): «Tienes 12 conceptos en tu Cuaderno — repasa "CI/CD"».
-5. Guardar `last_sent_on = hoy`. Al tocar la notificación se abre `/cuaderno/:id` (ruta de la web; la API es `/concepts/{id}`).
+2. Enviar si: el día de la semana está en `weekdays`, la hora actual está entre `local_time` y `local_time + 2 h`, y `last_sent_on` ≠ ese día (local).
+3. Elegir un concepto al azar **con la ficha terminada** (la ficha asignada y el trabajo `completed`: uno que aún busca videos enseñaría el panel de carga); si no hay ninguno, no enviar y no reclamar el día.
+4. Mensaje (en su idioma, con singular): «Tienes 12 conceptos en tu Cuaderno — repasa "CI/CD"» / «You have 12 concepts in your Notebook — review "CI/CD"». El título es el de la ficha, recortado a 80 caracteres. `N` es cuántos conceptos con ficha terminada tiene.
+5. Enviarlo a **todos** sus dispositivos activos. El aviso lleva `url = /cuaderno/:id` (ruta de la web; la API es `/concepts/{id}`), `tag = reminder` y `ttl = 1 h`: un repaso que llega pasada una hora ya no sirve.
 
-Con esta lógica, si una ejecución se retrasa o falla, la siguiente envía el recordatorio igualmente y nunca se manda dos veces el mismo día. La ventana de 2 h evita avisos a deshora tras una caída larga, o al activar el recordatorio cuando su hora ya pasó.
+**Sin duplicados.** Antes de enviar, el reloj **reclama** el día con un único `UPDATE reminder_settings SET last_sent_on = <día> WHERE user_id = … AND last_sent_on IS DISTINCT FROM <día>`. Si dos ejecuciones se solapan, solo una lo consigue; la otra no manda nada. Cambiar la hora o los días el mismo día no repite el aviso (los ajustes no tocan `last_sent_on`).
+
+**Si falla.** Un 404/410 da de baja ese dispositivo (`active = false`). Si **ningún** dispositivo lo recibió y hubo algún fallo que puede arreglarse solo (`unavailable` o `rejected`), el reclamo se **devuelve** (`last_sent_on` vuelve a su valor anterior) y la siguiente ejecución, un minuto después, lo intenta otra vez; se insiste solo mientras dure la ventana de 2 h. Si el fallo es `expired` (el dispositivo ya no existe) o `not_configured` (faltan claves VAPID) no se insiste: el día queda reclamado. Si al menos un dispositivo lo recibió, el día queda enviado.
+
+**Medianoche y cambios de hora.** Un aviso pertenece al día **local** en que cae su hora: con 23:30 elegido, a las 00:30 se mira el día de ayer (su día de la semana y su envío), así que no se repite pasada la medianoche. Con el cambio de hora, una hora que no existe (02:30 el día que se adelanta el reloj) cuenta desde el instante equivalente, y una que ocurre dos veces (02:30 el día que se atrasa) desde la primera: en ambos casos la ventana de 2 h es una sola. Una zona horaria desconocida se ignora sin romper el reloj.
+
+Con esta lógica, si una ejecución se retrasa o falla, la siguiente envía el recordatorio igualmente y nunca se manda dos veces el mismo día. La ventana de 2 h evita avisos a deshora tras una caída larga. Al activar el recordatorio cuando su hora ya pasó **hace menos de 2 h**, el aviso sale al momento (sirve de confirmación); pasado ese margen, hasta el día siguiente.
+
+**Registros:** solo contadores (`recordatorio sent: recibidos=1 caducados=0 fallos=-`), nunca el concepto, el usuario, el endpoint ni las claves.
 
 ---
 
@@ -571,7 +602,7 @@ Un concepto o trabajo ajeno responde 404 `not_found` en todos estos endpoints, i
 | Método | Ruta | Descripción |
 |---|---|---|
 | `POST` | `/internal/jobs` | Solo con `X-Internal-Secret` (sin cabecera CSRF ni sesión) → `{ due, completed, retrying, failed, skipped }` |
-| `POST` | `/internal/reminders` | Solo con `X-Internal-Secret` |
+| `POST` | `/internal/reminders` | Solo con `X-Internal-Secret` (sin cabecera CSRF ni sesión) → `{ checked, due, sent, retrying, failed, skipped }` |
 | `POST` | `/internal/cleanup` | Solo con `X-Internal-Secret` (503 si `INTERNAL_SECRET` no está definida, 401 si falta o no coincide; no exige `X-Requested-With`, porque lo llama `pg_cron`). Borra sesiones y códigos caducados, eventos de límite de más de 2 días y cuentas sin verificar de más de 7 días; responde con cuántas filas quitó de cada cosa. Solo registra números |
 | `GET` | `/health` | Sin auth; comprueba la conexión a la base de datos |
 
@@ -614,7 +645,9 @@ EMAIL_FROM_NAME=CompaBook
 VAPID_PUBLIC_KEY=
 VAPID_PRIVATE_KEY=
 VAPID_SUBJECT=mailto:<gmail del proyecto>
-PUSH_TIMEOUT_SECONDS=10          # espera máxima por envío a un servicio de push
+PUSH_TIMEOUT_SECONDS=5           # espera máxima por envío a un servicio de push
+REMINDERS_MAX_PER_RUN=30         # usuarios a los que avisa el reloj por llamada
+REMINDERS_BUDGET_SECONDS=25      # tras estos segundos el reloj no empieza con otro usuario
 INTERNAL_SECRET=
 JOBS_MAX_PER_RUN=3
 JOBS_BUDGET_SECONDS=30           # tras estos segundos el reloj no empieza otro trabajo

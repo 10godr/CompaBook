@@ -45,12 +45,18 @@ class Settings(BaseSettings):
     youtube_timeout_seconds: float = 10.0
 
     # Espera máxima por envío a un servicio de push (Apple, Google, Mozilla, Microsoft).
-    push_timeout_seconds: float = 10.0
+    push_timeout_seconds: float = 5.0
 
     # El reloj (/internal/jobs): cuántos trabajos por llamada, y los segundos tras los cuales no
     # empieza otro (la función de Vercel muere a los 60 s).
     jobs_max_per_run: int = 3
     jobs_budget_seconds: float = 30.0
+
+    # El reloj de recordatorios (/internal/reminders): a cuántos usuarios avisa por llamada y
+    # los segundos tras los cuales no empieza con otro. Cada usuario puede tardar hasta 5
+    # envíos de `push_timeout_seconds`; con el presupuesto, el peor caso queda bajo los 60 s.
+    reminders_max_per_run: int = 30
+    reminders_budget_seconds: float = 25.0
 
     # Límites por usuario y día local (users.timezone); diseno-tecnico.md §2.5.
     daily_concept_limit: int = 30

@@ -3,7 +3,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import datetime
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session as DbSession
 from sqlalchemy.orm import joinedload
@@ -15,6 +15,15 @@ def _like_pattern(text: str) -> str:
     """Texto del buscador como patrón de `ILIKE`: `%`, `_` y `\\` valen como letras normales."""
     escaped = text.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
     return f"%{escaped}%"
+
+
+@dataclass(frozen=True)
+class ReviewPick:
+    """Un concepto con ficha terminada, para el recordatorio, y cuántos hay en total."""
+
+    concept_id: uuid.UUID
+    title: str
+    total: int
 
 
 class ConceptRepository:
@@ -37,6 +46,31 @@ class ConceptRepository:
         self.db.add(concept)
         self.db.flush()
         return concept
+
+    def pick_for_review(self) -> ReviewPick | None:
+        """Un concepto al azar con la ficha terminada. None si no hay ninguno."""
+        finished = (
+            Concept.user_id == self.user_id,
+            Concept.card_id.is_not(None),
+            ProcessingJob.status == "completed",
+        )
+        total = self.db.scalar(
+            select(func.count())
+            .select_from(Concept)
+            .join(ProcessingJob, ProcessingJob.concept_id == Concept.id)
+            .where(*finished)
+        )
+        if not total:
+            return None
+        row = self.db.execute(
+            select(Concept.id, ConceptCard.canonical_title)
+            .join(ProcessingJob, ProcessingJob.concept_id == Concept.id)
+            .join(ConceptCard, ConceptCard.id == Concept.card_id)
+            .where(*finished)
+            .order_by(func.random())
+            .limit(1)
+        ).first()
+        return ReviewPick(row.id, row.canonical_title, total) if row else None
 
     def get(self, concept_id: uuid.UUID) -> Concept | None:
         return self.db.scalar(

@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session as DbSession
 from app.api.deps import require_internal_secret
 from app.config import get_settings
 from app.db import get_db
-from app.services import accounts, jobs, maintenance
+from app.services import accounts, jobs, maintenance, reminders
 from app.services.ai import AIProvider, get_ai_provider
+from app.services.push import PushProvider, get_push_provider
 from app.services.youtube import VideoProvider, get_video_provider
 
 router = APIRouter(prefix="/internal", dependencies=[Depends(require_internal_secret)])
@@ -34,4 +35,16 @@ def process_jobs(
         db, ai, videos, settings.jobs_max_per_run, settings.jobs_budget_seconds
     )
     logger.info("jobs: %s", counts)  # solo números; nada de conceptos ni de usuarios
+    return counts
+
+
+@router.post("/reminders")
+def send_reminders(
+    db: DbSession = Depends(get_db), push: PushProvider = Depends(get_push_provider)
+) -> dict[str, int]:
+    settings = get_settings()
+    counts = reminders.run_due_reminders(
+        db, push, settings.reminders_max_per_run, settings.reminders_budget_seconds
+    )
+    logger.info("reminders: %s", counts)  # solo números; nada de conceptos ni de usuarios
     return counts
